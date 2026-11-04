@@ -28,7 +28,7 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 
 ### 3. GitHub snapshot collection
 
-- [ ] Add a local collection command or helper using authenticated `gh` to fetch a PR by URL, its description, metadata, and diff without a checkout. Capture base and head IDs and verify they remain stable during collection.
+- [x] Add a local collection command or helper using authenticated `gh` to fetch a PR by URL, its description, metadata, and diff without a checkout. Capture base and head IDs and verify they remain stable during collection.
 - **Depends on:** tasks 1–2.
 - **Boundary:** Do not generate narrative or build a viewer. Keep process and filesystem access outside the browser-compatible core.
 - **Acceptance:** Automated tests cover authentication/access errors, incomplete data, and changed commit IDs; document prerequisites and manually verify against an accessible PR.
@@ -80,3 +80,4 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - Initial scaffold: Bun workspace, TypeScript, Biome, a self-contained JSON snapshot, and separate generation and viewing steps. The web viewer is launched with a local artifact path.
 - Task 1: Version 1 stores per-file unified diff text or an explicit binary/unavailable marker. Sections can reference whole files or inclusive, one-based old/new line ranges; structural validation checks file IDs and ranges, while diff resolution and coverage remain task 2. Unknown fields are preserved. Tests, lint, formatting, and typecheck pass.
 - Task 2: Diff parsing preserves raw lines and rejects unsupported or incomplete content. Coverage tracks additions and deletions separately; line references select changed lines on their stated side, while whole-file references cover all available content or an explicit non-text marker. Unreferenced metadata-only files are also reported.
+- Task 3: A separate Bun collector invokes `gh` without a checkout and emits PR metadata and per-file diffs as intermediate JSON. It reconciles the paginated file list, headers, and changed-line counts, rejects unsupported or incomplete data, and rechecks base and head commits. Tests and workspace checks pass; manual collection succeeded for `cli/cli#1`.

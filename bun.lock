@@ -18,6 +18,10 @@
       "name": "@guided-review/web",
       "version": "0.0.0",
     },
+    "packages/collector": {
+      "name": "@guided-review/collector",
+      "version": "0.0.0",
+    },
     "packages/core": {
       "name": "@guided-review/core",
       "version": "0.0.0",
@@ -41,6 +45,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.2.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-NXnfTeKHDFUWfxAefa57DiGmu9VyKi0cDqFpdI+1hJWQjGJhJutHPX0b5m+eXvTKOaf+brU+P0JrQAZMb5yYaQ=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.2.4", "", { "os": "win32", "cpu": "x64" }, "sha512-3Y4V4zVRarVh/B/eSHczR4LYoSVyv3Dfuvm3cWs5w/HScccS0+Wt/lHOcDTRYeHjQmMYVC3rIRWqyN2EI52+zg=="],
+
+    "@guided-review/collector": ["@guided-review/collector@workspace:packages/collector"],
 
     "@guided-review/core": ["@guided-review/core@workspace:packages/core"],
 
