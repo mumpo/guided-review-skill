@@ -17,6 +17,14 @@ A review artifact is a UTF-8 JSON document. The complete example is in [packages
 
 Import `parseSnapshot(json)` to parse and validate a JSON string, or `validateSnapshot(value)` to validate an already-parsed value; both return a `ReviewSnapshot` and throw `SnapshotValidationError` with a field path on invalid input. Validation checks the structure, IDs, and range syntax, but does not parse diffs, verify that ranges identify changed lines, or assess coverage. Those checks belong to diff processing. Unknown fields are retained and ignored by version 1 validation; a future incompatible contract must use a new version.
 
+## Diff processing
+
+`parseDiff(file)` parses a file's unified diff into headers, hunks, and lines with old and new line numbers. Raw strings retain their original line endings, including no-newline markers. Binary and unavailable files retain their explicit markers. Malformed, truncated, multi-file, and unsupported text raises `DiffParseError` with the file ID. The parser accepts hunk-only and standard single-file Git unified diffs, including metadata-only changes.
+
+`analyzeDiffs(snapshot)` parses every file, resolves each section's references, and returns `files`, ordered `sections`, `invalidReferences`, and `uncovered`. Validate the snapshot first. Whole-file references select all hunks or the binary/unavailable marker. A line reference selects additions on the new side or deletions on the old side within its inclusive range; context-only or non-text references are invalid. Selected hunks retain their original headers but contain only selected lines and their no-newline markers, so their original counts may exceed the selected content. The parsed file retains the full context.
+
+Coverage counts each addition and deletion independently, even when they replace one another. Overlapping references are allowed. Unreferenced binary, unavailable, and metadata-only files appear in `uncovered` with an empty line list; an unavailable marker does not imply its unknown contents were inspected. A whole-file reference covers the available content or marker.
+
 ## Workspace
 
 - `packages/core`: shared, runtime-independent review model and diff logic.
