@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "pullRequest": {
+    "url": "https://github.com/example/project/pull/42",
+    "owner": "example",
+    "repository": "project",
+    "number": 42,
+    "title": "Update the greeting",
+    "description": "Updates the greeting and moves the guide.",
+    "author": "reviewer",
+    "baseCommit": "0123456789abcdef0123456789abcdef01234567",
+    "headCommit": "abcdef0123456789abcdef0123456789abcdef01"
+  },
+  "summary": "Updates the greeting and documentation.",
+  "files": [
+    {
+      "id": "greeting",
+      "oldPath": "src/greeting.ts",
+      "newPath": "src/greeting.ts",
+      "status": "modified",
+      "diff": {
+        "kind": "text",
+        "unified": "@@ -1,2 +1,2 @@\n-hello\n+hello world\n unchanged\n@@ -10 +10 @@\n-goodbye\n+see you\n"
+      }
+    },
+    {
+      "id": "guide",
+      "oldPath": "guide.md",
+      "newPath": "docs/guide.md",
+      "status": "renamed",
+      "diff": {
+        "kind": "text",
+        "unified": "@@ -1 +1 @@\n-Old guide\n+New guide\n"
+      }
+    },
+    {
+      "id": "image",
+      "oldPath": null,
+      "newPath": "image.png",
+      "status": "added",
+      "diff": { "kind": "binary" }
+    },
+    {
+      "id": "large",
+      "oldPath": "large.txt",
+      "newPath": "large.txt",
+      "status": "modified",
+      "diff": { "kind": "unavailable", "reason": "Diff omitted by source" }
+    }
+  ],
+  "sections": [
+    {
+      "title": "Greeting",
+      "explanation": "Changes the greeting and its guide.",
+      "diagram": "greeting -> guide",
+      "references": [
+        {
+          "kind": "lines",
+          "fileId": "greeting",
+          "side": "old",
+          "startLine": 1,
+          "endLine": 1
+        },
+        {
+          "kind": "lines",
+          "fileId": "greeting",
+          "side": "new",
+          "startLine": 1,
+          "endLine": 1
+        },
+        {
+          "kind": "lines",
+          "fileId": "guide",
+          "side": "new",
+          "startLine": 1,
+          "endLine": 1
+        }
+      ]
+    },
+    {
+      "title": "Farewell",
+      "explanation": "Changes the farewell.",
+      "references": [
+        {
+          "kind": "lines",
+          "fileId": "greeting",
+          "side": "old",
+          "startLine": 10,
+          "endLine": 10
+        },
+        {
+          "kind": "lines",
+          "fileId": "greeting",
+          "side": "new",
+          "startLine": 10,
+          "endLine": 10
+        }
+      ]
+    },
+    {
+      "title": "Other files",
+      "explanation": "The image is binary and the large diff is unavailable.",
+      "references": [
+        { "kind": "file", "fileId": "image" },
+        { "kind": "file", "fileId": "large" }
+      ]
+    }
+  ]
+}
