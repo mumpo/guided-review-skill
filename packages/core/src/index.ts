@@ -204,3 +204,5 @@ export function parseSnapshot(json: string): ReviewSnapshot {
   }
   return validateSnapshot(value);
 }
+
+export * from "./diff";
