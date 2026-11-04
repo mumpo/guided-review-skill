@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createTestRenderer, KeyCodes } from "@opentui/core/testing";
+import { analyzeDiffs } from "../../../packages/core/src";
 import { loadReview } from "./load";
 import { mountReview } from "./view";
 
@@ -35,12 +36,27 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(ui.captureCharFrame()).toContain(
       "Changes the greeting and its guide.",
     );
+    expect(ui.captureCharFrame()).toContain("Diagram");
+    expect(ui.captureCharFrame()).toContain("greeting -> guide");
+    expect(ui.captureCharFrame()).toContain("File: src/greeting.ts (modified)");
+    expect(ui.captureCharFrame()).toContain("  1 |     | -hello");
+    expect(ui.captureCharFrame()).toContain("    |   1 | +hello world");
+    expect(ui.captureCharFrame()).toContain("guide.md -> docs/guide.md");
+    expect(ui.captureCharFrame()).not.toContain("-goodbye");
     await ui.mockInput.pressKeys([KeyCodes.ARROW_RIGHT]);
     await ui.renderOnce();
     expect(ui.captureCharFrame()).toContain("Section 2/3: Farewell");
+    expect(ui.captureCharFrame()).toContain(" 10 |     | -goodbye");
+    expect(ui.captureCharFrame()).not.toContain("+hello world");
     ui.mockInput.pressTab();
     await ui.renderOnce();
     expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
+    expect(ui.captureCharFrame()).toContain(
+      "Binary file: textual diff is not available.",
+    );
+    expect(ui.captureCharFrame()).toContain(
+      "Diff unavailable: Diff omitted by source",
+    );
     await ui.mockInput.pressKeys(["n"]);
     await ui.renderOnce();
     expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
@@ -58,6 +74,57 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(ui.captureCharFrame()).toContain("#42 · Summary");
     await ui.mockInput.pressKeys(["q"]);
     await ui.renderer.closed;
+  } finally {
+    await ui.dispose();
+  }
+});
+
+test("ungrouped diffs scroll through wrapped code and resize without losing content", async () => {
+  const review = await loadReview(fixture);
+  const longCode = `+${"x".repeat(90)}WRAP_END`;
+  review.snapshot.files[0].diff = {
+    kind: "text",
+    unified: `@@ -0,0 +1,52 @@\n+DIFF_START\n${longCode}\n${Array.from({ length: 49 }, (_, i) => `+code line ${i + 3}\n`).join("")}+DIFF_END\n`,
+  };
+  review.snapshot.sections = [
+    {
+      title: "Ungrouped changes",
+      explanation: "Inspect these changes separately.",
+      references: [{ kind: "file", fileId: "greeting" }],
+    },
+  ];
+  review.analysis = analyzeDiffs(review.snapshot);
+  const ui = await createTestRenderer({ width: 100, height: 22 });
+  try {
+    mountReview(ui.renderer, review);
+    await ui.mockInput.pressKeys(["n"]);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("Ungrouped changes");
+    expect(ui.captureCharFrame()).toContain("DIFF_START");
+    expect(ui.captureCharFrame()).toContain("WRAP_END");
+    expect(ui.captureCharFrame()).not.toContain("DIFF_END");
+    ui.resize(32, 22);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("DIFF_START");
+    // A long unbroken code line is wrapped, including its final characters.
+    await ui.mockInput.pressKeys(["j", "j", "j", "j"]);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("WRAP_END");
+    await ui.mockInput.pressKeys(Array(20).fill("\u001b[6~"));
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("52 | +DIFF_END");
+    expect(ui.captureCharFrame()).not.toContain("DIFF_START");
+    ui.resize(72, 16);
+    await ui.renderOnce();
+    await ui.mockInput.pressKeys(Array(20).fill("\u001b[5~"));
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("DIFF_START");
+    await ui.mockInput.pressKeys(["s"]);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).not.toContain("DIFF_START");
+    await ui.mockInput.pressKeys(["n"]);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("DIFF_START");
   } finally {
     await ui.dispose();
   }
