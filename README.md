@@ -1,8 +1,48 @@
 # Guided Review
 
-Guided Review will help people review GitHub pull requests through an ordered, Claude-generated walkthrough of the actual changes. A shared review artifact will support a terminal viewer and a GitHub-inspired web viewer without requiring a checkout of the PR repository.
+Guided Review will help people review GitHub pull requests through an ordered, agent-generated walkthrough of the actual changes. A shared review artifact will support a terminal viewer and a GitHub-inspired web viewer without requiring a checkout of the PR repository.
 
-The shared artifact contract and GitHub collection helper are implemented; narrative generation and the viewers are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
+The shared artifact contract, GitHub collection helper, and generation skill for Codex and Claude Code are implemented; the viewers are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
+
+## Generate a guided review
+
+Keep a full clone of this repository and install its dependencies with `bun install`. Install Bun, Codex or Claude Code, and an authenticated GitHub CLI. When working in this repository, both agents discover the same skill through checked-in links:
+
+| Agent | Discovery path | Invocation |
+| --- | --- | --- |
+| Codex | `.agents/skills/guided-review` | `$guided-review https://github.com/OWNER/REPO/pull/NUMBER /absolute/path/review.json` |
+| Claude Code | `.claude/skills/guided-review` | `/guided-review https://github.com/OWNER/REPO/pull/NUMBER /absolute/path/review.json` |
+
+Both links point to `skills/guided-review`, which contains the single shared instructions, generation reference, and helpers. No personal installation is needed to use the skill in this repository. If Codex does not show the newly added skill, restart the session. See the official [Codex skill documentation](https://learn.chatgpt.com/docs/build-skills) and [Claude Code skill documentation](https://code.claude.com/docs/en/skills) for discovery and invocation.
+
+To make the skill available from other projects, optionally link it into the relevant personal skills directory. Run the commands for your agent from this repository's root. For Codex:
+
+```sh
+mkdir -p ~/.agents/skills
+ln -s "$PWD/skills/guided-review" ~/.agents/skills/guided-review
+```
+
+For Claude Code:
+
+```sh
+mkdir -p ~/.claude/skills
+ln -s "$PWD/skills/guided-review" ~/.claude/skills/guided-review
+```
+
+Keep the clone at that location: the skill's helpers use the shared core and collector in the repository. Copying just the skill folder will not work. If `guided-review` already exists in your skills directory, choose which installation to keep before linking. A personal link may show a duplicate skill entry when working in this repository, where the repository link also applies.
+
+The output path is optional; the default is `review-OWNER-REPO-NUMBER.json` in your working directory. The agent collects the real diff, writes a summary and ordered narrative sections, then builds and validates the artifact. The workflow does not execute PR code or submit reviews. Important behavior and review questions come first; related changes can span files or cover separate parts of one file. Changes that cannot be confidently grouped appear in a final `Ungrouped changes` section. Binary and unavailable markers explicitly retain inspection limits. The resulting artifact needs no GitHub access to read.
+
+The [skill instructions](skills/guided-review/SKILL.md) and [generation reference](skills/guided-review/references/generation.md) define the workflow. The helper takes the collector's JSON and a separate narrative JSON containing only `summary` and `sections`:
+
+```sh
+bun run skills/guided-review/scripts/artifact.ts build collection.json narrative.json review.json
+bun run skills/guided-review/scripts/artifact.ts validate collection.json review.json
+```
+
+Building preserves collected metadata and diff text, rejects invalid references, and adds uncovered changes to `Ungrouped changes`. Validation compares the finished artifact with the original collection and checks every reference and captured change. Both commands work offline. They exit nonzero with actionable errors for malformed inputs, changed source data, or invalid references; building refuses to overwrite an existing output. Use a new output path for a revision. Section priority and narrative accuracy still require human/model inspection; validation establishes structural validity and coverage.
+
+A generated example for `cli/cli#1` is in [skills/guided-review/fixtures/cli-pr-1.json](skills/guided-review/fixtures/cli-pr-1.json), with selection/action behavior ordered before command wiring and both parts of the file covered.
 
 ## Collect a pull request
 
@@ -41,11 +81,11 @@ Coverage counts each addition and deletion independently, even when they replace
 - `packages/collector`: local GitHub CLI collection helper.
 - `apps/tui`: terminal viewer, planned with OpenTUI.
 - `apps/web`: browser viewer, planned with React and shadcn/ui.
-- `skills/guided-review`: Claude Code skill placeholder.
+- `skills/guided-review`: shared Codex and Claude Code generation skill, offline build/validation helper, and a real-PR example.
 
 ## Development
 
-Install [Bun](https://bun.sh/) 1.3.14 or later, then run `bun install`. The future generation workflow will also require Claude Code and an authenticated GitHub CLI (`gh`).
+Install [Bun](https://bun.sh/) 1.3.14 or later, then run `bun install`. Generation also requires Codex or Claude Code and an authenticated GitHub CLI (`gh`).
 
 | Command | Purpose |
 | --- | --- |
