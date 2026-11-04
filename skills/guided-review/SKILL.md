@@ -5,7 +5,7 @@ description: Generate a self-contained guided review JSON artifact from a GitHub
 
 # Guided Review
 
-Create a version 1 review snapshot without checking out the PR. Read the GitHub.com PR URL and optional output path from the user's request or skill invocation; default to `review-OWNER-REPO-NUMBER.json` in the user's working directory. Resolve output paths before changing directories. This shared skill works in Codex and Claude Code and requires the full Guided Review repository, Bun, and authenticated `gh` access.
+Create a review snapshot without checking out the PR. Read the GitHub.com PR URL and optional output path from the user's request or skill invocation; default to `review-OWNER-REPO-NUMBER.json` in the user's working directory. Resolve output paths before changing directories. This shared skill works in Codex and Claude Code and requires the full Guided Review repository, Bun, and authenticated `gh` access.
 
 Resolve the directory containing this `SKILL.md` to its real absolute path, following any discovery symlink. Use that path as the shell variable `SKILL_DIR` in the commands below; set it in each shell invocation rather than relying on shell state or host-specific variable substitution. Its helpers resolve workspace imports relative to their own files. Keep this directory inside the full repository; copying only the skill folder is insufficient. The repository's `.agents/skills/guided-review` (Codex) and `.claude/skills/guided-review` (Claude Code) links both point to this same directory.
 
