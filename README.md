@@ -2,7 +2,7 @@
 
 Guided Review will help people review GitHub pull requests through an ordered, agent-generated walkthrough of the actual changes. A shared review artifact will support a terminal viewer and a GitHub-inspired web viewer without requiring a checkout of the PR repository.
 
-The shared artifact contract, GitHub collection helper, and generation skill for Codex and Claude Code are implemented; the viewers are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
+The shared artifact contract, GitHub collection helper, generation skill for Codex and Claude Code, and terminal viewer foundation are implemented. Detailed terminal diffs and the web viewer are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
 
 ## Generate a guided review
 
@@ -44,6 +44,29 @@ Building preserves collected metadata and diff text, rejects invalid references,
 
 A generated example for `cli/cli#1` is in [skills/guided-review/fixtures/cli-pr-1.json](skills/guided-review/fixtures/cli-pr-1.json), with selection/action behavior ordered before command wiring and both parts of the file covered.
 
+## Open a review in the terminal
+
+After `bun install`, run from the repository root in an interactive terminal:
+
+```sh
+bun run dev:tui path/to/review.json
+```
+
+Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cli-pr-1.json`. Paths are relative to your current directory; absolute paths also work. Viewing works offline, without `gh`, authentication, or a PR checkout.
+
+The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its title and explanation. Markdown is displayed as plain source text. Detailed diffs and diagrams will be added in task 6.
+
+| Keys | Action |
+| --- | --- |
+| `n`, `→`, `Tab` | Next section (from the summary, open the first). |
+| `p`, `←`, `Shift+Tab` | Previous section (from the first, return to summary). |
+| `s`, `Home` | Return to summary. |
+| `End` | Open the last section. |
+| `↑`/`↓`, `k`/`j`, `PageUp`/`PageDown` | Scroll the current page. |
+| `q`, `Ctrl+C` | Quit and restore the terminal. |
+
+Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
+
 ## Collect a pull request
 
 Install Bun and the [GitHub CLI](https://cli.github.com/), and authenticate with `gh auth login` using an account that can access the PR. Run:
@@ -79,7 +102,7 @@ Coverage counts each addition and deletion independently, even when they replace
 
 - `packages/core`: shared, runtime-independent review model and diff logic.
 - `packages/collector`: local GitHub CLI collection helper.
-- `apps/tui`: terminal viewer, planned with OpenTUI.
+- `apps/tui`: OpenTUI terminal viewer with local validation, summary, and section navigation.
 - `apps/web`: browser viewer, planned with React and shadcn/ui.
 - `skills/guided-review`: shared Codex and Claude Code generation skill, offline build/validation helper, and a real-PR example.
 
@@ -89,7 +112,7 @@ Install [Bun](https://bun.sh/) 1.3.14 or later, then run `bun install`. Generati
 
 | Command | Purpose |
 | --- | --- |
-| `bun run dev` or `bun run dev:tui` | TUI development placeholder. |
+| `bun run dev <artifact.json>` or `bun run dev:tui <artifact.json>` | Open a local artifact in the terminal viewer. |
 | `bun run dev:web` | Web development placeholder. |
 | `bun run test` | Run the test suite. |
 | `bun run lint` | Check code with Biome. |
@@ -97,6 +120,6 @@ Install [Bun](https://bun.sh/) 1.3.14 or later, then run `bun install`. Generati
 | `bun run format` | Apply Biome formatting. |
 | `bun run typecheck` | Type-check the workspace. |
 
-The development commands currently print a placeholder message and exit; they do not start a viewer or server.
+The web development command currently prints a placeholder message and exits.
 
 Pull requests run the test suite, lint, formatting, and type checks in GitHub Actions.
