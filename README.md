@@ -2,7 +2,17 @@
 
 Guided Review will help people review GitHub pull requests through an ordered, Claude-generated walkthrough of the actual changes. A shared review artifact will support a terminal viewer and a GitHub-inspired web viewer without requiring a checkout of the PR repository.
 
-The shared artifact contract is implemented; generation and the viewers are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
+The shared artifact contract and GitHub collection helper are implemented; narrative generation and the viewers are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
+
+## Collect a pull request
+
+Install Bun and the [GitHub CLI](https://cli.github.com/), and authenticate with `gh auth login` using an account that can access the PR. Run:
+
+```sh
+bun run collect https://github.com/OWNER/REPO/pull/NUMBER > collection.json
+```
+
+No checkout is needed. The command writes JSON containing `pullRequest` metadata and `files` to standard output. This is intermediate input for creating an artifact: it does not include a summary or review sections. Errors go to standard error and produce a nonzero exit status. The collector checks the file list, diff and changed-line counts for completeness, and verifies that the base and head commits remain unchanged during collection. Retry if the commits change. GitHub's 3,000-file API limit and unsupported file statuses prevent collection rather than silently omitting changes. Only GitHub.com PR URLs are supported.
 
 ## Review artifact (version 1)
 
@@ -28,6 +38,7 @@ Coverage counts each addition and deletion independently, even when they replace
 ## Workspace
 
 - `packages/core`: shared, runtime-independent review model and diff logic.
+- `packages/collector`: local GitHub CLI collection helper.
 - `apps/tui`: terminal viewer, planned with OpenTUI.
 - `apps/web`: browser viewer, planned with React and shadcn/ui.
 - `skills/guided-review`: Claude Code skill placeholder.
