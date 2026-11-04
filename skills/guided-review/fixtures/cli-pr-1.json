@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "pullRequest": {
+    "url": "https://github.com/cli/cli/pull/1",
+    "owner": "cli",
+    "repository": "cli",
+    "number": 1,
+    "title": "interactive pr list",
+    "description": "this PR implements the interactive PR list we had in the original `cli-test` repo.\r\n\r\ncaveats:\r\n- doesn't visually split out PRs\r\n- doesn't explain what the contents of the list are\r\n- doesn't support closing because i need to remember how to do mutations with graphql\r\n\r\nit's not  ideal but it's something",
+    "author": "vilmibm",
+    "baseCommit": "8ebaf1d3aaf3eef03b349d20338c83157b0bcfd7",
+    "headCommit": "e9a3253762e768badaa1d4a5b3d267416d1e42f4"
+  },
+  "files": [
+    {
+      "id": "file-1",
+      "oldPath": "command/pr.go",
+      "newPath": "command/pr.go",
+      "status": "modified",
+      "diff": {
+        "kind": "text",
+        "unified": "diff --git a/command/pr.go b/command/pr.go\nindex 728c6ef7d74..16b31e3a048 100644\n--- a/command/pr.go\n+++ b/command/pr.go\n@@ -30,6 +30,10 @@ var prCmd = &cobra.Command{\n \tShort: \"Work with pull requests\",\n \tLong: `Interact with pull requests for this repository.\n `,\n+\tRun: func(cmd *cobra.Command, args []string) {\n+\t\terr := interactiveList()\n+\t\tutils.Check(err)\n+\t},\n }\n \n var prListCmd = &cobra.Command{\n@@ -196,6 +200,84 @@ func createPr(...string) {\n \t}\n }\n \n+func interactiveList() error {\n+\tcurrentPr, viewerCreated, reviewRequested, err := pullRequests()\n+\tif err != nil {\n+\t\treturn err\n+\t}\n+\n+\tprs := []graphqlPullRequest{}\n+\tif currentPr != nil {\n+\t\tprs = append(prs, *currentPr)\n+\t}\n+\tprs = append(prs, viewerCreated...)\n+\tprs = append(prs, reviewRequested...)\n+\n+\tconst openAction = \"open in browser\"\n+\tconst checkoutAction = \"checkout PR locally\"\n+\tconst cancelAction = \"cancel\"\n+\n+\tprOptions := []string{}\n+\tseen := map[int]bool{}\n+\tfor _, pr := range prs {\n+\t\tif seen[pr.Number] {\n+\t\t\tcontinue\n+\t\t}\n+\t\tprOptions = append(prOptions, fmt.Sprintf(\"[%v] %s\", pr.Number, pr.Title))\n+\t\tseen[pr.Number] = true\n+\t}\n+\n+\t// TODO figure out how to visually seperate the PR list\n+\tqs := []*survey.Question{\n+\t\t{\n+\t\t\tName: \"pr\",\n+\t\t\tPrompt: &survey.Select{\n+\t\t\t\tMessage: \"PRs you might be interested in\",\n+\t\t\t\tOptions: prOptions,\n+\t\t\t},\n+\t\t},\n+\t\t{\n+\t\t\tName: \"action\",\n+\t\t\tPrompt: &survey.Select{\n+\t\t\t\tMessage: \"What would you like to do?\",\n+\t\t\t\tOptions: []string{\n+\t\t\t\t\topenAction,\n+\t\t\t\t\tcheckoutAction,\n+\t\t\t\t\tcancelAction,\n+\t\t\t\t},\n+\t\t\t},\n+\t\t},\n+\t}\n+\n+\tanswers := struct {\n+\t\tPr     int\n+\t\tAction string\n+\t}{}\n+\n+\terr = survey.Ask(qs, &answers)\n+\tif err != nil {\n+\t\treturn err\n+\t}\n+\n+\tactions := map[string]func() error{}\n+\n+\tactions[cancelAction] = func() error { return nil }\n+\tactions[openAction] = func() error {\n+\t\tlauncher, err := utils.BrowserLauncher()\n+\t\tif err != nil {\n+\t\t\treturn err\n+\t\t}\n+\t\texec.Command(launcher[0], prs[answers.Pr].URL).Run()\n+\t\treturn nil\n+\t}\n+\tactions[checkoutAction] = func() error {\n+\t\tpr := prs[answers.Pr]\n+\t\treturn checkoutPr(fmt.Sprintf(\"%v\", pr.Number))\n+\t}\n+\n+\treturn actions[answers.Action]()\n+\n+}\n func list() error {\n \tcurrentPr, viewerCreated, reviewRequested, err := pullRequests()\n \tif err != nil {\n"
+      }
+    }
+  ],
+  "summary": "Adds an interactive flow to the root PR command. The new flow combines current, authored, and review-requested PRs, prompts for a selection, and dispatches browser, checkout, or cancel actions. Review selection-to-PR mapping first: displayed options are deduplicated, while action handlers index the original combined slice. This snapshot contains only the diff; no Go code or tests were executed.",
+  "sections": [
+    {
+      "title": "Select a PR and dispatch its action",
+      "explanation": "The new interactiveList function collects PRs, removes duplicate numbers from the displayed options, asks for a PR and an action, and dispatches through an action map. Verify how survey.Select fills the integer Pr answer: both browser and checkout actions use it as an index into prs, while the displayed list is deduplicated separately. The browser handler also discards the exec.Command(...).Run() error; check whether launch failures should reach the user. These are review questions based on the diff, not verified runtime failures.",
+      "diagram": "pullRequests -> combined PR slice -> deduplicated options -> survey answers -> browser / checkout / cancel",
+      "references": [
+        {
+          "kind": "lines",
+          "fileId": "file-1",
+          "side": "new",
+          "startLine": 203,
+          "endLine": 280
+        }
+      ]
+    },
+    {
+      "title": "Wire the root PR command to the interactive flow",
+      "explanation": "The root pr command now calls interactiveList and passes its returned error to utils.Check. This makes the flow reachable without a PR subcommand. Review the command entry point after the selection and dispatch behavior it invokes.",
+      "references": [
+        {
+          "kind": "lines",
+          "fileId": "file-1",
+          "side": "new",
+          "startLine": 33,
+          "endLine": 36
+        }
+      ]
+    }
+  ]
+}
