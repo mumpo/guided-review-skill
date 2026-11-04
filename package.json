@@ -9,7 +9,7 @@
   "scripts": {
     "collect": "bun run packages/collector/src/cli.ts",
     "dev": "bun run dev:tui",
-    "dev:tui": "bun run --filter @guided-review/tui dev",
+    "dev:tui": "bun run apps/tui/src/index.ts",
     "dev:web": "bun run --filter @guided-review/web dev",
     "test": "bun test",
     "lint": "biome lint .",
