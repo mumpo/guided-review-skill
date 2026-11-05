@@ -1,7 +1,27 @@
 import type { DiffLine, ResolvedReference } from "../../../packages/core/src";
 
+export type DiffMode = "auto" | "inline" | "side-by-side";
+export type RowRole =
+  | "file"
+  | "hunk"
+  | "marker"
+  | "context"
+  | "addition"
+  | "deletion";
+export interface DiffRow {
+  text: string;
+  role: RowRole;
+  line?: DiffLine;
+  prefix?: string;
+}
+export interface FileRows {
+  id: string;
+  rows: DiffRow[];
+  width: number;
+}
+
 /** Merge overlapping references, retaining the captured file, hunk, and line order. */
-export function renderSectionDiff(references: ResolvedReference[]): string {
+export function sectionDiffRows(references: ResolvedReference[]): FileRows[] {
   const files = new Map<ResolvedReference["file"], Set<DiffLine>>();
   for (const reference of references) {
     let selected = files.get(reference.file);
@@ -12,24 +32,29 @@ export function renderSectionDiff(references: ResolvedReference[]): string {
     for (const hunk of reference.hunks)
       for (const line of hunk.lines) selected.add(line);
   }
-  const blocks: string[] = [];
+  const blocks: FileRows[] = [];
   for (const [{ file, diff }, selected] of files) {
     const path =
       file.oldPath && file.newPath && file.oldPath !== file.newPath
         ? `${file.oldPath} -> ${file.newPath}`
         : (file.newPath ?? file.oldPath);
-    const rows = [`File: ${path} (${file.status})`];
+    const rows: DiffRow[] = [];
+    const push = (text: string, role: RowRole) => rows.push({ text, role });
+    let width = 3;
+    push(`File: ${path} (${file.status})`, "file");
     if (diff.kind === "binary") {
-      rows.push("Binary file: textual diff is not available.");
+      push("Binary file: textual diff is not available.", "marker");
     } else if (diff.kind === "unavailable") {
-      rows.push(`Diff unavailable: ${diff.reason}`);
+      push(`Diff unavailable: ${diff.reason}`, "marker");
     } else {
-      rows.push(...diff.header.map(stripEnding));
+      for (const header of diff.header) push(stripEnding(header), "file");
       if (diff.hunks.length === 0) {
-        rows.push("Metadata-only change: no textual hunks.");
+        push("Metadata-only change: no textual hunks.", "marker");
       } else {
-        rows.push("Old | New | Diff (selected lines; original hunk headers)");
-        let width = 3;
+        push(
+          "Old | New | Diff (selected lines; original hunk headers)",
+          "marker",
+        );
         for (const line of selected)
           width = Math.max(
             width,
@@ -41,31 +66,145 @@ export function renderSectionDiff(references: ResolvedReference[]): string {
             omittedHunks = true;
             continue;
           }
-          if (omittedHunks) rows.push("... unreferenced hunks omitted ...");
+          if (omittedHunks)
+            push("... unreferenced hunks omitted ...", "marker");
           omittedHunks = false;
-          rows.push(stripEnding(hunk.header));
+          push(stripEnding(hunk.header), "hunk");
           let omittedLines = false;
           for (const line of hunk.lines) {
             if (!selected.has(line)) {
               omittedLines = true;
               continue;
             }
-            if (omittedLines) rows.push("... unreferenced lines omitted ...");
+            if (omittedLines)
+              push("... unreferenced lines omitted ...", "marker");
             omittedLines = false;
             const old = String(line.oldLine ?? "").padStart(width);
             const next = String(line.newLine ?? "").padStart(width);
-            rows.push(`${old} | ${next} | ${stripEnding(line.raw)}`);
+            const prefix = `${old} | ${next} | `;
+            rows.push({
+              text: `${prefix}${stripEnding(line.raw)}`,
+              prefix,
+              role: line.kind === "no-newline" ? "marker" : line.kind,
+              line,
+            });
           }
-          if (omittedLines) rows.push("... unreferenced lines omitted ...");
+          if (omittedLines)
+            push("... unreferenced lines omitted ...", "marker");
         }
-        if (omittedHunks) rows.push("... unreferenced hunks omitted ...");
+        if (omittedHunks) push("... unreferenced hunks omitted ...", "marker");
       }
     }
-    blocks.push(rows.join("\n"));
+    blocks.push({ id: file.id, rows, width });
   }
-  return blocks.join("\n\n") || "(No referenced changes)";
+  return blocks;
 }
 
 function stripEnding(raw: string): string {
   return raw.replace(/\r?\n$/, "");
+}
+
+/** Plain-text compatibility adapter; selection and coverage stay independent of layout. */
+export function renderSectionDiff(references: ResolvedReference[]): string {
+  return (
+    sectionDiffRows(references)
+      .map((file) => file.rows.map((row) => row.text).join("\n"))
+      .join("\n\n") || "(No referenced changes)"
+  );
+}
+
+export interface DiffCell {
+  marker?: string;
+  text: string;
+  prefix: string;
+  role: RowRole;
+}
+export interface PresentationRow {
+  /** Source row indices allow viewport anchoring across layout changes. */
+  sources: number[];
+  full?: DiffRow;
+  left?: DiffCell;
+  right?: DiffCell;
+}
+
+export function effectiveDiffMode(
+  file: FileRows,
+  preference: DiffMode,
+  width: number,
+): Exclude<DiffMode, "auto"> {
+  if (preference !== "auto") return preference;
+  return width >= 100 &&
+    file.rows.some((r) => r.role === "addition") &&
+    file.rows.some((r) => r.role === "deletion")
+    ? "side-by-side"
+    : "inline";
+}
+
+/** Positional pairing never crosses a context, omission, or hunk boundary. */
+export function layoutFileRows(
+  file: FileRows,
+  mode: Exclude<DiffMode, "auto">,
+): PresentationRow[] {
+  if (mode === "inline")
+    return file.rows.map((full, index) => ({ full, sources: [index] }));
+  const result: PresentationRow[] = [];
+  const cell = (row: DiffRow, side: "old" | "new"): DiffCell => ({
+    prefix: `${String((side === "old" ? row.line?.oldLine : row.line?.newLine) ?? "").padStart(file.width)} | `,
+    text: stripEnding(row.line?.raw ?? ""),
+    role: row.role,
+  });
+  for (let i = 0; i < file.rows.length; ) {
+    const row = file.rows[i];
+    if (row.role === "addition" || row.role === "deletion") {
+      const left: { cell: DiffCell; sources: number[] }[] = [];
+      const right: typeof left = [];
+      while (i < file.rows.length) {
+        const current = file.rows[i];
+        if (current.role !== "addition" && current.role !== "deletion") break;
+        const side = current.role === "deletion" ? left : right;
+        const entry = {
+          cell: cell(current, current.role === "deletion" ? "old" : "new"),
+          sources: [i++],
+        };
+        const marker = file.rows[i]?.line;
+        if (marker?.kind === "no-newline") {
+          entry.cell.marker = stripEnding(marker.raw);
+          entry.sources.push(i++);
+        }
+        side.push(entry);
+      }
+      for (let j = 0; j < Math.max(left.length, right.length); j++)
+        result.push({
+          left: left[j]?.cell,
+          right: right[j]?.cell,
+          sources: [...(left[j]?.sources ?? []), ...(right[j]?.sources ?? [])],
+        });
+    } else if (row.line?.kind === "context") {
+      const entry = {
+        left: cell(row, "old"),
+        right: cell(row, "new"),
+        sources: [i++],
+      };
+      const marker = file.rows[i]?.line;
+      if (marker?.kind === "no-newline") {
+        entry.left.marker = stripEnding(marker.raw);
+        entry.right.marker = stripEnding(marker.raw);
+        entry.sources.push(i++);
+      }
+      result.push(entry);
+    } else {
+      result.push({
+        full:
+          row.text ===
+          "Old | New | Diff (selected lines; original hunk headers)"
+            ? {
+                ...row,
+                text: "Old (left) | New (right) · selected lines; original hunk headers",
+              }
+            : row,
+        sources: [i++],
+      });
+    }
+  }
+  return result;
 }

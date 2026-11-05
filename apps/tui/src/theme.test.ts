@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { themes } from "./theme";
+import { diffGutterBackground, themes } from "./theme";
 
 function luminance(hex: string): number {
   const channels = [1, 3, 5].map((offset) => {
@@ -19,6 +19,9 @@ test("theme text pairs meet a 4.5:1 contrast ratio", () => {
       [theme.diff.text, theme.diff.background],
       [theme.diff.addition.foreground, theme.diff.addition.background],
       [theme.diff.deletion.foreground, theme.diff.deletion.background],
+      [theme.diff.addition.foreground, diffGutterBackground(theme, "addition")],
+      [theme.diff.deletion.foreground, diffGutterBackground(theme, "deletion")],
+      [theme.diff.lineNumber, theme.surface],
       ...[
         theme.diff.context,
         theme.diff.hunk,
@@ -40,4 +43,17 @@ test("theme text pairs meet a 4.5:1 contrast ratio", () => {
       );
     }
   }
+});
+
+test("GitHub gutter colors retain alpha values and resolve over the diff canvas", () => {
+  const light = themes["github-light"];
+  const dark = themes["github-dark"];
+  expect(light.diff.addition.gutterBackground).toBe("#aceebb");
+  expect(light.diff.deletion.gutterBackground).toBe("#ffcecb");
+  expect(dark.diff.addition.gutterBackground).toBe("#2ea04366");
+  expect(dark.diff.deletion.gutterBackground).toBe("#f8514966");
+  expect(diffGutterBackground(light, "addition")).toBe("#aceebb");
+  expect(diffGutterBackground(light, "deletion")).toBe("#ffcecb");
+  expect(diffGutterBackground(dark, "addition")).toBe("#1a4a29");
+  expect(diffGutterBackground(dark, "deletion")).toBe("#6b2b2b");
 });

@@ -13,8 +13,16 @@ export interface Theme {
   diff: {
     text: string;
     background: string;
-    addition: { foreground: string; background: string };
-    deletion: { foreground: string; background: string };
+    addition: {
+      foreground: string;
+      background: string;
+      gutterBackground: string;
+    };
+    deletion: {
+      foreground: string;
+      background: string;
+      gutterBackground: string;
+    };
     context: string;
     hunk: string;
     file: string;
@@ -43,8 +51,16 @@ export const themes: Record<ThemeName, Theme> = {
     diff: {
       text: "#1f2328",
       background: "#ffffff",
-      addition: { foreground: "#116329", background: "#dafbe1" },
-      deletion: { foreground: "#82071e", background: "#ffebe9" },
+      addition: {
+        foreground: "#116329",
+        background: "#dafbe1",
+        gutterBackground: "#aceebb",
+      },
+      deletion: {
+        foreground: "#82071e",
+        background: "#ffebe9",
+        gutterBackground: "#ffcecb",
+      },
       context: "#1f2328",
       hunk: "#0550ae",
       file: "#1f2328",
@@ -75,8 +91,16 @@ export const themes: Record<ThemeName, Theme> = {
     diff: {
       text: "#e6edf3",
       background: "#0d1117",
-      addition: { foreground: "#aff5b4", background: "#033a16" },
-      deletion: { foreground: "#ffdcd7", background: "#67060c" },
+      addition: {
+        foreground: "#aff5b4",
+        background: "#033a16",
+        gutterBackground: "#2ea04366",
+      },
+      deletion: {
+        foreground: "#ffdcd7",
+        background: "#67060c",
+        gutterBackground: "#f8514966",
+      },
       context: "#e6edf3",
       hunk: "#79c0ff",
       file: "#e6edf3",
@@ -100,4 +124,25 @@ export const themes: Record<ThemeName, Theme> = {
 
 export function themeForMode(mode: "light" | "dark" | null): Theme {
   return themes[mode === "light" ? "github-light" : "github-dark"];
+}
+
+/** Flatten GitHub's translucent gutter colors over the diff canvas for the terminal. */
+export function diffGutterBackground(
+  theme: Theme,
+  role: "addition" | "deletion",
+): string {
+  const color = theme.diff[role].gutterBackground;
+  if (color.length !== 9) return color;
+  const alpha = Number.parseInt(color.slice(7, 9), 16) / 255;
+  const channels = [1, 3, 5].map((offset) => {
+    const foreground = Number.parseInt(color.slice(offset, offset + 2), 16);
+    const background = Number.parseInt(
+      theme.diff.background.slice(offset, offset + 2),
+      16,
+    );
+    return Math.round(foreground * alpha + background * (1 - alpha))
+      .toString(16)
+      .padStart(2, "0");
+  });
+  return `#${channels.join("")}`;
 }
