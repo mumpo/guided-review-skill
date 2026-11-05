@@ -386,7 +386,7 @@ test("summary and description format independently while titles, metadata and na
     expect(frame).toContain("Explanation heading");
     expect(frame).not.toContain("## Explanation heading");
     expect(frame).toContain("formatted explanation");
-    expect(frame).toContain("File: src/greeting.ts");
+    expect(frame).toContain("src/greeting.ts");
 
     applyTheme(themes["github-light"]);
     await ui.renderOnce();

@@ -21,6 +21,8 @@ export interface FileRows {
   id: string;
   oldPath?: string | null;
   newPath?: string | null;
+  additions?: number;
+  deletions?: number;
   rows: DiffRow[];
   width: number;
 }
@@ -123,6 +125,16 @@ export function sectionDiffRows(references: ResolvedReference[]): FileRows[] {
       id: file.id,
       oldPath: file.oldPath,
       newPath: file.newPath,
+      additions: (diff.kind === "text" ? diff.hunks : []).reduce(
+        (count, hunk) =>
+          count + hunk.lines.filter((line) => line.kind === "addition").length,
+        0,
+      ),
+      deletions: (diff.kind === "text" ? diff.hunks : []).reduce(
+        (count, hunk) =>
+          count + hunk.lines.filter((line) => line.kind === "deletion").length,
+        0,
+      ),
       rows,
       width,
     });

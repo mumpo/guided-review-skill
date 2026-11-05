@@ -29,6 +29,8 @@ export interface Theme {
     context: string;
     hunk: string;
     file: string;
+    statsAddition: string;
+    statsDeletion: string;
     lineNumber: string;
     marker: string;
   };
@@ -69,6 +71,8 @@ export const themes: Record<ThemeName, Theme> = {
       context: "#1f2328",
       hunk: "#0550ae",
       file: "#1f2328",
+      statsAddition: "#3fb950",
+      statsDeletion: "#f85149",
       lineNumber: "#59636e",
       marker: "#59636e",
     },
@@ -111,6 +115,8 @@ export const themes: Record<ThemeName, Theme> = {
       context: "#e6edf3",
       hunk: "#79c0ff",
       file: "#e6edf3",
+      statsAddition: "#3fb950",
+      statsDeletion: "#f85149",
       lineNumber: "#9198a1",
       marker: "#9198a1",
     },

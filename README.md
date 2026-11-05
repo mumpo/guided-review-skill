@@ -54,9 +54,9 @@ bun run dev:tui path/to/review.json
 
 Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cli-pr-1.json`. Paths are relative to your current directory; absolute paths also work. Viewing works offline, without `gh`, authentication, or a PR checkout.
 
-The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation and referenced real diff with file paths, change status, and old/new line numbers. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
+The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation and referenced real diff with file paths and old/new line numbers. Each file has a bordered header with a clickable collapse chevron and green addition/red deletion counts for the full captured file. Renames show both paths. Press `c` to toggle the first file intersecting the visible viewport; collapse state survives theme, layout, and width changes, and resets when navigating sections. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
 
-Line references show only selected changes, with original hunk headers and explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Renames show both paths, while binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
+Line references show only selected changes, with explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Raw Git metadata, hunk labels, and layout labels are hidden; separate hunks retain a blank separator. Binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
 
 | Keys | Action |
 | --- | --- |
@@ -65,6 +65,7 @@ Line references show only selected changes, with original hunk headers and expli
 | `s`, `Home` | Return to summary. |
 | `End` | Open the last section. |
 | `↑`/`↓`, `k`/`j`, `PageUp`/`PageDown` | Scroll the current page. |
+| `c` | Collapse or expand the first file intersecting the visible viewport. |
 | `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
@@ -104,7 +105,7 @@ bun run dev:tui --diff-mode inline path/to/review.json
 bun run dev:tui path/to/review.json --diff-mode=side-by-side
 ```
 
-Set `"diffMode": "side-by-side"` in the same user config file described below for a persistent default. Precedence is `--diff-mode` → config file → `auto`; an explicit `auto` overrides a fixed config preference. Press `d` to cycle the session preference without changing the config file. Help shows the preference, and each file header labels its effective layout. Invalid values and duplicate flags fail before terminal initialization.
+Set `"diffMode": "side-by-side"` in the same user config file described below for a persistent default. Precedence is `--diff-mode` → config file → `auto`; an explicit `auto` overrides a fixed config preference. Press `d` to cycle the session preference without changing the config file. Help shows the preference. Invalid values and duplicate flags fail before terminal initialization.
 
 Inline mode displays the unified diff with old/new line numbers. Side-by-side mode displays old lines on the left and new lines on the right, with separate line numbers and visible `-`/`+` signs. Lines pair in original order within each contiguous selected change block; unmatched lines leave the other pane blank. Context appears on both sides. Omission markers prevent pairing across unselected changes, and no unselected lines are added to fill a pane. Both panes wrap independently and stay aligned; forced side-by-side remains split at narrow widths. Mode switches and resizing retain the current section and anchor the visible diff row where possible.
 

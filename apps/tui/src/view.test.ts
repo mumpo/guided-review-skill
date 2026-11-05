@@ -153,10 +153,10 @@ test("opens a local fixture and navigates ordered sections with real key events"
     );
     expect(ui.captureCharFrame()).not.toContain("Diagram");
     expect(ui.captureCharFrame()).not.toContain("greeting -> guide");
-    expect(ui.captureCharFrame()).toContain("File: src/greeting.ts (modified)");
+    expect(ui.captureCharFrame()).toContain("src/greeting.ts");
     expect(ui.captureCharFrame()).toContain("  1         -hello");
     expect(ui.captureCharFrame()).toContain("        1   +hello world");
-    expect(ui.captureCharFrame()).toContain("guide.md -> docs/guide.md");
+    expect(ui.captureCharFrame()).toContain("guide.md → docs/guide.md");
     expect(ui.captureCharFrame()).not.toContain("-goodbye");
 
     await ui.mockInput.pressKeys([KeyCodes.ARROW_RIGHT]);
