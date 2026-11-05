@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { RGBA, type ScrollBoxRenderable } from "@opentui/core";
+import { RGBA, TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
 import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
@@ -133,8 +133,7 @@ test("both themes paint full inline rows and full split panes, including unequal
         }
 
         for (const [text, fg] of [
-          ["diff --git", theme.diff.file],
-          ["@@ -1", theme.diff.hunk],
+          ["src/greeting.ts", theme.diff.file],
           ["No newline", theme.diff.marker],
         ]) {
           const span = captured.lines
@@ -160,10 +159,9 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
     await ui.mockInput.pressKeys(["n"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain(
-      "src/greeting.ts (modified) [side-by-side]",
-    );
-    expect(ui.captureCharFrame()).toContain("docs/guide.md (renamed) [inline]");
+    expect(ui.captureCharFrame()).toContain("src/greeting.ts");
+    expect(ui.captureCharFrame()).toContain("docs/guide.md");
+    expect(ui.captureCharFrame()).toContain(" │ ");
     expect(ui.captureCharFrame()).not.toContain("-Old guide");
 
     const before = ui.captureCharFrame();
@@ -176,43 +174,42 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
     ui.resize(102, 45);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain(
-      "src/greeting.ts (modified) [inline]",
-    );
+    expect(
+      ui
+        .captureCharFrame()
+        .split("\n")
+        .find((line) => line.includes("-hello")),
+    ).not.toContain("+hello world");
+
+    expect(ui.captureCharFrame()).toContain("src/greeting.ts");
 
     ui.resize(103, 45);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain(
-      "src/greeting.ts (modified) [side-by-side]",
-    );
+    expect(ui.captureCharFrame()).toContain("src/greeting.ts");
 
     await ui.mockInput.pressKeys(["d"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("d: diff inline");
-    expect(ui.captureCharFrame()).toContain(
-      "src/greeting.ts (modified) [inline]",
-    );
+    expect(ui.captureCharFrame()).toContain("src/greeting.ts");
 
     await ui.mockInput.pressKeys(["d"]);
     ui.resize(40, 45);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Old (left) | New (right)");
+    expect(ui.captureCharFrame()).toContain(" │ ");
 
     await ui.mockInput.pressKeys(["n", "p"]);
     ui.resize(120, 45);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain(
-      "docs/guide.md (renamed) [side-by-side]",
-    );
+    expect(ui.captureCharFrame()).toContain("docs/guide.md");
 
     await ui.mockInput.pressKeys(["d"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("docs/guide.md (renamed) [inline]");
+    expect(ui.captureCharFrame()).toContain("docs/guide.md");
 
     await ui.mockInput.pressKeys(["n", "n"]);
     await ui.renderOnce();
@@ -346,8 +343,8 @@ test("markers, metadata, and empty sections retain readable themed messages in b
           );
         }
 
-        expect(ui.captureCharFrame()).toContain("old mode 100644");
-        expect(ui.captureCharFrame()).toContain("new mode 100755");
+        expect(ui.captureCharFrame()).not.toContain("old mode 100644");
+        expect(ui.captureCharFrame()).not.toContain("new mode 100755");
       }
 
       await ui.mockInput.pressKeys(["n"]);
@@ -647,6 +644,100 @@ test("partial identifier edits emphasize whole words in both themes and layouts"
           for (const punctuation of ["(", ")", ";"])
             expect(text).not.toContain(punctuation);
         }
+      } finally {
+        await ui.dispose();
+      }
+    }
+  }
+});
+
+test("file headers replace Git metadata with counts and collapse independently across live updates", async () => {
+  for (const theme of Object.values(themes)) {
+    for (const mode of ["inline", "side-by-side"] as DiffMode[]) {
+      const ui = await createTestRenderer({ width: 120, height: 45 });
+
+      try {
+        const applyTheme = mountReview(ui.renderer, review(), theme, mode);
+        await ui.mockInput.pressKeys(["n"]);
+        await ui.renderOnce();
+
+        const frame = ui.captureCharFrame();
+        const lines = frame.split("\n");
+        const y = lines.findIndex((line) => line.includes("src/greeting.ts"));
+        const x = lines[y].indexOf("⌄");
+        const header = lines[y];
+
+        expect(lines[y - 1]).toContain("┌─");
+        expect(lines[y + 1]).toContain("└─");
+        expect(header).toMatch(/⌄\s+src\/greeting.ts\s+\+2 -2/);
+        expect(header.indexOf("+2")).toBeGreaterThan(100);
+        for (const text of [
+          "File:",
+          "diff --git",
+          "--- a/",
+          "+++ b/",
+          "@@",
+          "Old | New",
+          "[inline]",
+          "[side-by-side]",
+        ]) {
+          expect(frame).not.toContain(text);
+        }
+
+        const spans = ui.captureSpans().lines[y].spans;
+
+        for (const [text, color] of [
+          ["+2", "#3fb950"],
+          ["-2", "#f85149"],
+        ]) {
+          const span = spans.find((span) => span.text.includes(text));
+
+          expect(span?.fg.equals(RGBA.fromHex(color))).toBe(true);
+          expect((span?.attributes ?? 0) & TextAttributes.BOLD).toBeTruthy();
+        }
+
+        await ui.mockMouse.click(x, y);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).not.toContain("+hello world");
+        expect(ui.captureCharFrame()).toContain("+New guide");
+        expect(ui.captureCharFrame()).toContain("›");
+
+        await ui.mockMouse.click(x, y);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).toContain("+hello world");
+        expect(ui.captureCharFrame()).not.toContain("›");
+
+        await ui.mockMouse.click(x, y);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).not.toContain("+hello world");
+
+        await ui.mockInput.pressKeys(["d"]);
+        applyTheme(
+          themes[
+            theme.name === "github-light" ? "github-dark" : "github-light"
+          ],
+        );
+        ui.resize(36, 45);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).not.toContain("+hello world");
+        expect(ui.captureCharFrame()).toContain("src/greeting.ts");
+        expect(ui.captureCharFrame()).toContain("+2 -2");
+
+        await ui.mockInput.pressKeys(["c"]);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).toContain("+hello");
+        expect(ui.captureCharFrame()).not.toContain("›");
+
+        await ui.mockInput.pressKeys(["n", "p"]);
+        ui.resize(120, 45);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).toContain("+hello world");
       } finally {
         await ui.dispose();
       }

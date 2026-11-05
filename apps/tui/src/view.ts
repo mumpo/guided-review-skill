@@ -135,7 +135,7 @@ export function mountReview(
   applyTheme(theme);
 
   function updateHelp() {
-    help.content = `n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | d: diff ${diffMode} | q/Ctrl+C: quit`;
+    help.content = `n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | c: collapse file | d: diff ${diffMode} | q/Ctrl+C: quit`;
   }
 
   updateHelp();
@@ -213,6 +213,9 @@ export function mountReview(
     let nextPage = page;
 
     switch (key.name) {
+      case "c":
+        changes.toggleVisibleFile();
+        break;
       case "d": {
         const modes: DiffMode[] = ["auto", "inline", "side-by-side"];
         diffMode = modes[(modes.indexOf(diffMode) + 1) % modes.length];

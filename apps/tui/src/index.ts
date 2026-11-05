@@ -25,7 +25,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     exitOnCtrlC: true,
     screenMode: "alternate-screen",
     consoleMode: "disabled",
-    useMouse: false,
+    useMouse: true,
   });
 
   try {

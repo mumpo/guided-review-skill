@@ -5,6 +5,7 @@ import {
   type ScrollBoxRenderable,
   StyledText,
   TextRenderable,
+  TextAttributes,
 } from "@opentui/core";
 import {
   type DiffCell,
@@ -40,6 +41,16 @@ export class DiffView extends BoxRenderable {
     file: string;
     sources: number[];
   }[] = [];
+  private collapsed = new Set<string>();
+  private headers: {
+    file: FileRows;
+    box: BoxRenderable;
+    chevron: TextRenderable;
+    path: TextRenderable;
+    added: TextRenderable;
+    deleted: TextRenderable;
+    content: BoxRenderable;
+  }[] = [];
   private signature = "";
   private anchorEpoch = 0;
   private fills: { node: BoxRenderable; role: RowRole }[] = [];
@@ -61,6 +72,7 @@ export class DiffView extends BoxRenderable {
   setFiles(files: FileRows[], preference: DiffMode) {
     this.anchorEpoch++;
     this.files = files;
+    this.collapsed.clear();
     this.syntax = new Map(files.flatMap((file) => [...highlightFile(file)]));
     this.changes = new Map(
       files.flatMap((file) => [...changedFileSpans(file)]),
@@ -98,7 +110,12 @@ export class DiffView extends BoxRenderable {
   private preserve(change: () => void) {
     const epoch = ++this.anchorEpoch;
     const top = this.body.viewport.y;
-    const anchor = this.logical.find(({ node }) => node.y + node.height > top);
+    const anchor = this.logical.find(
+      ({ node, file }) =>
+        (!this.collapsed.has(file) ||
+          this.headers.some((header) => header.box === node)) &&
+        node.y + node.height > top,
+    );
     const oldY = anchor?.node.y;
 
     change();
@@ -122,9 +139,103 @@ export class DiffView extends BoxRenderable {
     });
   }
 
+  toggleVisibleFile() {
+    const top = this.body.viewport.y;
+    const bottom = top + this.body.viewport.height;
+    const header = this.headers.find(
+      ({ box, content }) =>
+        box.y < bottom &&
+        Math.max(
+          box.y + box.height,
+          content.visible ? content.y + content.height : 0,
+        ) > top,
+    );
+    if (header) this.toggleFile(header.file.id);
+  }
+
+  private toggleFile(id: string) {
+    const header = this.headers.find(({ file }) => file.id === id);
+    if (!header) return;
+
+    this.anchorEpoch++;
+    if (this.collapsed.has(id)) this.collapsed.delete(id);
+    else this.collapsed.add(id);
+
+    header.content.visible = !this.collapsed.has(id);
+    header.chevron.content = header.content.visible ? "⌄" : "›";
+  }
+
+  private fileHeader(file: FileRows) {
+    const content = new BoxRenderable(this.renderer, {
+      width: "100%",
+      flexDirection: "column",
+      flexShrink: 0,
+      visible: !this.collapsed.has(file.id),
+    });
+    const box = new BoxRenderable(this.renderer, {
+      id: `file-header-${file.id}`,
+      width: "100%",
+      border: true,
+      paddingLeft: 1,
+      paddingRight: 1,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      flexShrink: 0,
+      gap: 1,
+    });
+    const button = new BoxRenderable(this.renderer, {
+      width: 3,
+      height: 1,
+      flexShrink: 0,
+      onMouseDown: (event) => {
+        if (event.button !== 0) return;
+
+        event.stopPropagation();
+        this.toggleFile(file.id);
+      },
+    });
+    const chevron = new TextRenderable(this.renderer, {
+      content: content.visible ? "⌄" : "›",
+      width: 3,
+    });
+    button.add(chevron);
+
+    const name =
+      file.oldPath && file.newPath && file.oldPath !== file.newPath
+        ? `${file.oldPath} → ${file.newPath}`
+        : (file.newPath ?? file.oldPath ?? file.id);
+    const path = new TextRenderable(this.renderer, {
+      content: name,
+      flexGrow: 1,
+      flexBasis: 0,
+      minWidth: 0,
+      wrapMode: "char",
+    });
+    const added = new TextRenderable(this.renderer, {
+      content: `+${file.additions ?? 0}`,
+      attributes: TextAttributes.BOLD,
+      flexShrink: 0,
+    });
+    const deleted = new TextRenderable(this.renderer, {
+      content: `-${file.deletions ?? 0}`,
+      attributes: TextAttributes.BOLD,
+      flexShrink: 0,
+    });
+
+    for (const node of [button, path, added, deleted]) box.add(node);
+
+    this.add(box);
+    this.add(content);
+    this.headers.push({ file, box, chevron, path, added, deleted, content });
+    this.logical.push({ node: box, file: file.id, sources: [0] });
+
+    return content;
+  }
+
   private rebuild() {
     for (const child of this.getChildren()) child.destroyRecursively();
 
+    this.headers = [];
     this.painted = [];
     this.fills = [];
     this.logical = [];
@@ -150,17 +261,33 @@ export class DiffView extends BoxRenderable {
         this.availableWidth(),
       );
 
+      const content =
+        file.oldPath || file.newPath ? this.fileHeader(file) : this;
+      let seenHunk = false;
+
       for (const row of layoutFileRows(file, mode)) {
+        if (
+          row.full?.role === "file" ||
+          (row.full?.role === "marker" &&
+            (row.full.text ===
+              "Old | New | Diff (selected lines; original hunk headers)" ||
+              row.full.text ===
+                "Old (left) | New (right) · selected lines; original hunk headers"))
+        )
+          continue;
+        if (row.full?.role === "hunk") {
+          // Keep separate hunks visibly separated without showing Git metadata.
+          if (seenHunk)
+            content.add(
+              new BoxRenderable(this.renderer, { height: 1, flexShrink: 0 }),
+            );
+          seenHunk = true;
+          continue;
+        }
         let node: BoxRenderable | TextRenderable;
         if (row.full) {
           const full = row.full;
-          const text =
-            full === file.rows[0] && full.role === "file"
-              ? `${full.text} [${mode}]`
-              : full.text ===
-                  "Old | New | Diff (selected lines; original hunk headers)"
-                ? "Old   New   Diff (selected lines; original hunk headers)"
-                : full.text;
+          const text = full.text;
           node = new BoxRenderable(this.renderer, {
             width: "100%",
             flexDirection: "column",
@@ -209,7 +336,7 @@ export class DiffView extends BoxRenderable {
           }
         }
 
-        this.add(node);
+        content.add(node);
         this.logical.push({ node, file: file.id, sources: row.sources });
       }
     });
@@ -233,6 +360,18 @@ export class DiffView extends BoxRenderable {
   setTheme(theme: Theme) {
     this.palette = theme;
     this.backgroundColor = theme.diff.background;
+
+    for (const { box, chevron, path, added, deleted } of this.headers) {
+      box.backgroundColor = theme.surface;
+      box.borderColor = theme.muted;
+      for (const node of [chevron, path, added, deleted])
+        node.bg = theme.surface;
+
+      chevron.fg = theme.muted;
+      path.fg = theme.diff.file;
+      added.fg = theme.diff.statsAddition;
+      deleted.fg = theme.diff.statsDeletion;
+    }
 
     for (const { node, role } of this.fills) {
       node.backgroundColor =
