@@ -1,5 +1,5 @@
 import { loadReview } from "./load";
-import { loadThemePreference, parseArgs, usage } from "./config";
+import { loadPreferences, parseArgs, usage } from "./config";
 
 export { usage } from "./config";
 
@@ -9,7 +9,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     console.log(usage);
     return;
   }
-  const preference = await loadThemePreference(options.theme);
+  const preferences = await loadPreferences(options);
 
   // Validate before loading native UI code or taking control of the terminal.
   const review = await loadReview(options.path);
@@ -27,9 +27,10 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   });
   try {
     let applyTheme: ReturnType<typeof mountReview> | undefined;
-    await startTheme(renderer, preference, (theme) => {
+    await startTheme(renderer, preferences.theme, (theme) => {
       if (applyTheme) applyTheme(theme);
-      else applyTheme = mountReview(renderer, review, theme);
+      else
+        applyTheme = mountReview(renderer, review, theme, preferences.diffMode);
     });
     await renderer.closed;
   } finally {

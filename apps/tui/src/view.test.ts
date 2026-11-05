@@ -44,7 +44,11 @@ test("both themes paint explicit readable colors without changing displayed cont
         theme.diagram.foreground,
         theme.diagram.background,
       );
-      expectColor("+hello world", theme.diff.text, theme.diff.background);
+      expectColor(
+        "+hello world",
+        theme.diff.addition.foreground,
+        theme.diff.addition.background,
+      );
       frames.push(ui.captureCharFrame());
     } finally {
       await ui.dispose();

@@ -69,11 +69,11 @@ test("invalid configuration is actionable even when a higher priority source ove
   ]) {
     await writeFile(path, content);
     await expect(loadThemePreference("github-dark", {}, path)).rejects.toThrow(
-      `Invalid theme configuration ${path}`,
+      `Invalid viewer configuration ${path}`,
     );
   }
   await expect(loadThemePreference(undefined, {}, temp)).rejects.toThrow(
-    "Cannot read theme configuration",
+    "Cannot read viewer configuration",
   );
   for (const value of ["", "light"]) {
     await expect(
@@ -85,5 +85,48 @@ test("invalid configuration is actionable even when a higher priority source ove
     ).rejects.toThrow(
       "GUIDED_REVIEW_THEME: expected auto, github-light, or github-dark",
     );
+  }
+});
+
+test("diff mode accepts both CLI forms and rejects missing, invalid, and duplicate values", () => {
+  expect(parseArgs(["--diff-mode", "inline", "review.json"])).toMatchObject({
+    diffMode: "inline",
+  });
+  expect(
+    parseArgs(["review.json", "--diff-mode=side-by-side", "--theme=auto"]),
+  ).toMatchObject({ diffMode: "side-by-side", theme: "auto" });
+  for (const args of [
+    ["a", "--diff-mode"],
+    ["a", "--diff-mode=split"],
+    ["a", "--diff-mode=auto", "--diff-mode=inline"],
+  ]) {
+    expect(() => parseArgs(args)).toThrow("--diff-mode");
+  }
+});
+
+test("shared configuration resolves diff mode independently and validates overridden values", async () => {
+  const { loadPreferences } = await import("./config");
+  const path = join(temp, "diff.json");
+  expect(await loadPreferences({}, {}, join(temp, "missing.json"))).toEqual({
+    theme: "auto",
+    diffMode: "auto",
+  });
+  await writeFile(path, '{"theme":"github-light","diffMode":"side-by-side"}');
+  expect(await loadPreferences({}, {}, path)).toEqual({
+    theme: "github-light",
+    diffMode: "side-by-side",
+  });
+  expect(
+    await loadPreferences(
+      { diffMode: "auto" },
+      { GUIDED_REVIEW_THEME: "github-dark" },
+      path,
+    ),
+  ).toEqual({ theme: "github-dark", diffMode: "auto" });
+  for (const value of [null, "split", false, 1]) {
+    await writeFile(path, JSON.stringify({ diffMode: value }));
+    await expect(
+      loadPreferences({ diffMode: "inline" }, {}, path),
+    ).rejects.toThrow("diffMode: expected auto, inline, or side-by-side");
   }
 });

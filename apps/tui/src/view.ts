@@ -6,7 +6,8 @@ import {
   TextRenderable,
 } from "@opentui/core";
 import type { LoadedReview } from "./load";
-import { renderSectionDiff } from "./diff";
+import { type DiffMode, sectionDiffRows } from "./diff";
+import { DiffView } from "./diff-view";
 import { type Theme, themes } from "./theme";
 
 /** A summary followed by the artifact's sections, in their original order. */
@@ -14,6 +15,7 @@ export function mountReview(
   renderer: CliRenderer,
   review: LoadedReview,
   theme: Theme = themes["github-dark"],
+  diffMode: DiffMode = "auto",
 ): (theme: Theme) => void {
   const { snapshot, analysis } = review;
   const pr = snapshot.pullRequest;
@@ -54,12 +56,7 @@ export function mountReview(
     flexShrink: 0,
   });
   body.add(diagram);
-  const changes = new TextRenderable(renderer, {
-    id: "changes",
-    content: "",
-    wrapMode: "char",
-    flexShrink: 0,
-  });
+  const changes = new DiffView(renderer, body, theme);
   body.add(changes);
   const help = new TextRenderable(renderer, {
     id: "help",
@@ -82,8 +79,7 @@ export function mountReview(
     narrative.bg = theme.background;
     diagram.fg = theme.diagram.foreground;
     diagram.bg = theme.diagram.background;
-    changes.fg = theme.diff.text;
-    changes.bg = theme.diff.background;
+    changes.setTheme(theme);
     help.fg = theme.muted;
     help.bg = theme.surface;
     body.scrollbarOptions = {
@@ -99,11 +95,16 @@ export function mountReview(
   }
   applyTheme(theme);
 
+  function updateHelp() {
+    help.content = `n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | d: diff ${diffMode} | q/Ctrl+C: quit`;
+  }
+  updateHelp();
+
   function showPage() {
     const section = snapshot.sections[page - 1];
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${page === 0 ? "Summary" : `Section ${page}/${snapshot.sections.length}: ${section.title}`}\n`;
     if (page === 0) {
-      changes.content = "";
+      changes.setFiles([], diffMode);
       diagram.content = "";
       const limits = snapshot.files
         .filter((file) => file.diff.kind !== "text")
@@ -133,7 +134,19 @@ export function mountReview(
       diagram.content = section.diagram
         ? `\n\nDiagram\n${section.diagram}`
         : "";
-      changes.content = `\n\n${renderSectionDiff(analysis.sections[page - 1])}`;
+      const files = sectionDiffRows(analysis.sections[page - 1]);
+      changes.setFiles(
+        files.length
+          ? files
+          : [
+              {
+                id: "empty",
+                width: 3,
+                rows: [{ text: "(No referenced changes)", role: "marker" }],
+              },
+            ],
+        diffMode,
+      );
     }
     body.scrollTo(0);
   }
@@ -146,6 +159,13 @@ export function mountReview(
     if (key.ctrl || key.meta || key.option) return;
     let nextPage = page;
     switch (key.name) {
+      case "d": {
+        const modes: DiffMode[] = ["auto", "inline", "side-by-side"];
+        diffMode = modes[(modes.indexOf(diffMode) + 1) % modes.length];
+        updateHelp();
+        changes.setMode(diffMode);
+        break;
+      }
       case "n":
       case "right":
         nextPage++;
@@ -190,7 +210,12 @@ export function mountReview(
   }
 
   renderer.keyInput.on("keypress", onKey);
-  renderer.once("destroy", () => renderer.keyInput.off("keypress", onKey));
+  const onResize = () => changes.resizeLayout();
+  renderer.on("resize", onResize);
+  renderer.once("destroy", () => {
+    renderer.keyInput.off("keypress", onKey);
+    renderer.off("resize", onResize);
+  });
   showPage();
   return applyTheme;
 }

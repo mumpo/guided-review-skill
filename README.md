@@ -65,9 +65,23 @@ Line references show only selected changes, with original hunk headers and expli
 | `s`, `Home` | Return to summary. |
 | `End` | Open the last section. |
 | `↑`/`↓`, `k`/`j`, `PageUp`/`PageDown` | Scroll the current page. |
+| `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
 Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
+
+### Diff layouts
+
+Diffs support `auto` (default), `inline`, and `side-by-side`. Automatic selection examines each file’s selected changes in the current section: additions-only or deletions-only uses inline; selections containing both use side-by-side. Below 100 available diff columns (103 terminal columns with the current margins and scrollbar), automatic mode uses inline. Binary, unavailable, and metadata-only content remains a full-width message.
+
+```sh
+bun run dev:tui --diff-mode inline path/to/review.json
+bun run dev:tui path/to/review.json --diff-mode=side-by-side
+```
+
+Set `"diffMode": "side-by-side"` in the same user config file described below for a persistent default. Precedence is `--diff-mode` → config file → `auto`; an explicit `auto` overrides a fixed config preference. Press `d` to cycle the session preference without changing the config file. Help shows the preference, and each file header labels its effective layout. Invalid values and duplicate flags fail before terminal initialization.
+
+Inline mode displays the unified diff with old/new line numbers. Side-by-side mode displays old lines on the left and new lines on the right, with separate line numbers and visible `-`/`+` signs. Lines pair in original order within each contiguous selected change block; unmatched lines leave the other pane blank. Context appears on both sides. Omission markers prevent pairing across unselected changes, and no unselected lines are added to fill a pane. Both panes wrap independently and stay aligned; forced side-by-side remains split at narrow widths. Mode switches and resizing retain the current section and anchor the visible diff row where possible.
 
 ### Terminal themes
 
@@ -83,12 +97,12 @@ bun run dev:tui path/to/review.json --theme=github-dark
 For a persistent preference, set `GUIDED_REVIEW_THEME` in your shell or create `$XDG_CONFIG_HOME/guided-review/config.json` (default: `~/.config/guided-review/config.json`):
 
 ```json
-{ "theme": "github-light" }
+{ "theme": "github-light", "diffMode": "auto" }
 ```
 
-Precedence is `--theme` → `GUIDED_REVIEW_THEME` → config file → `auto`. All sources accept `auto`, `github-light`, or `github-dark`; an explicit `auto` restores automatic selection even when a lower-priority source names a fixed theme. Fixed themes ignore terminal appearance changes. A missing config file is normal and the viewer never creates one. Malformed/unreadable config files, unknown keys, and invalid theme values produce errors before terminal initialization, including when another source overrides them. An empty environment value is invalid; unset it to use the config file. `--help` works without loading configuration.
+Precedence is `--theme` → `GUIDED_REVIEW_THEME` → config file → `auto`. All sources accept `auto`, `github-light`, or `github-dark`; an explicit `auto` restores automatic selection even when a lower-priority source names a fixed theme. Fixed themes ignore terminal appearance changes. A missing config file is normal and the viewer never creates one. Malformed/unreadable config files, unknown keys, and invalid theme or diff-mode values produce errors before terminal initialization, including when another source overrides them. An empty environment value is invalid; unset it to use the config file. `--help` works without loading configuration.
 
-Both palettes set text and background colors explicitly for the viewport, navigation, narrative, diagrams, diffs, help, and scrollbars. Detailed addition/deletion coloring and Markdown formatting remain planned separately.
+Both palettes set text and background colors explicitly for the viewport, navigation, narrative, diagrams, diffs, help, and scrollbars. Added and deleted lines use distinct foregrounds and full-row backgrounds (full-pane backgrounds in side-by-side mode), including wrapped continuations. Context, file/hunk headers, line numbers, omission markers, and non-text messages use semantic theme colors. Markdown formatting remains planned separately.
 
 ## Collect a pull request
 
