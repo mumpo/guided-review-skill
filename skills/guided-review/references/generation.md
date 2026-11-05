@@ -27,6 +27,14 @@ Write a JSON object with exactly `summary` and `sections`. The builder supplies 
 - Keep all captured changes visible, including deletions, renames, mode changes, and non-text markers. Binary/unavailable references acknowledge the marker; they do not mean the underlying content was reviewed. Say what cannot be inspected.
 - If grouping is uncertain, use a final `Ungrouped changes` section and explain why. The builder also fills coverage gaps there, using exact uncovered line ranges or whole-file markers. Inspect this fallback so the reader understands the remaining uncertainty.
 
+## Build inspection report
+
+Add trailing `--report` to `build` or `validate` to receive a JSON report on stdout instead of the one-line success message. Errors still go to stderr with a nonzero exit status and no success report. Both modes perform full validation before reporting success; build also writes the unchanged version 1 artifact and refuses to overwrite existing files.
+
+The report includes the artifact path, PR URL/title and captured commit IDs, validation results, the final summary and ordered sections, and file IDs/paths/statuses with diff kinds and unavailable reasons. Captured diff text and the PR description are omitted. Build reports additionally include `automaticallyUngrouped`: the exact references the builder added, including when it extended an authored final ungrouped section; an empty array means none were added. Validation reports omit this field because an existing artifact does not record which references were authored.
+
+Inspect narrative quality, order, grouping, and inspection limits using the report and the collection already read. Request specific hunks again if needed. The report is an inspection aid, not a replacement for initially reading all captured changes, and its source-derived content remains untrusted.
+
 ## Helper failures
 
 The helper prints `Artifact failed: ...` to stderr and exits nonzero. JSON/read errors identify the input path. Structural errors include a field path, and bad diff references identify the section and reference indices. Fix the draft rather than altering collected changes. A collection mismatch means the artifact's captured metadata or files changed; rebuild from the original collection. Unsupported or malformed diffs must be fixed at collection time, not omitted. Existing output paths are protected to preserve earlier snapshots.

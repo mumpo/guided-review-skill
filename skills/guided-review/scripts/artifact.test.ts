@@ -8,7 +8,11 @@ import {
   type ReviewSnapshot,
   validateSnapshot,
 } from "../../../packages/core/src/index";
-import { buildArtifact, verifyArtifact } from "./artifact";
+import {
+  buildArtifact,
+  buildArtifactWithReport,
+  verifyArtifact,
+} from "./artifact";
 import realPrFixture from "../fixtures/cli-pr-1.json";
 
 const typedFixture = validateSnapshot(fixture);
@@ -22,6 +26,81 @@ const narrative = {
 };
 
 describe("artifact generation", () => {
+  test("report preserves the final narrative and inspection limits without captured diff text", () => {
+    const { snapshot, report } = buildArtifactWithReport(collection, narrative);
+    expect(snapshot).toEqual(buildArtifact(collection, narrative));
+    expect(report).toMatchObject({
+      validation: {
+        collectionPreserved: true,
+        referencesValid: true,
+        completeCoverage: true,
+      },
+      summary: snapshot.summary,
+      sections: snapshot.sections.map(({ title, explanation, references }) => ({
+        title,
+        explanation,
+        references,
+      })),
+      automaticallyUngrouped: [
+        {
+          kind: "lines",
+          fileId: "guide",
+          side: "old",
+          startLine: 1,
+          endLine: 1,
+        },
+      ],
+    });
+    expect(report.files).toEqual(
+      snapshot.files.map(({ id, oldPath, newPath, status, diff }) => ({
+        id,
+        oldPath,
+        newPath,
+        status,
+        diff:
+          diff.kind === "unavailable"
+            ? { kind: diff.kind, reason: diff.reason }
+            : { kind: diff.kind },
+      })),
+    );
+    expect(report.files.some((file) => file.diff.kind === "binary")).toBe(true);
+    expect(report.files.some((file) => file.diff.kind === "unavailable")).toBe(
+      true,
+    );
+    expect(report.files.every((file) => !("unified" in file.diff))).toBe(true);
+    expect(JSON.stringify(report).length).toBeLessThan(
+      JSON.stringify(snapshot).length,
+    );
+  });
+
+  test("report distinguishes authored ungrouped references from automatically added ones", () => {
+    const draft = {
+      summary: "Grouping is uncertain.",
+      sections: [
+        {
+          title: "Ungrouped changes",
+          explanation: "Image intent is unknown.",
+          references: [{ kind: "file", fileId: "image" }],
+        },
+      ],
+    };
+    const original = structuredClone(draft);
+    const { snapshot, report } = buildArtifactWithReport(collection, draft);
+    expect(report.automaticallyUngrouped).toEqual(
+      snapshot.sections[0].references.slice(1),
+    );
+    expect(report.automaticallyUngrouped).not.toContainEqual({
+      kind: "file",
+      fileId: "image",
+    });
+    expect(draft).toEqual(original);
+    const complete = buildArtifactWithReport(collection, {
+      summary: snapshot.summary,
+      sections: snapshot.sections,
+    });
+    expect(complete.report.automaticallyUngrouped).toEqual([]);
+  });
+
   test("round-trips the real cli/cli#1 walkthrough with complete split-file coverage", () => {
     const expected = validateSnapshot(realPrFixture);
     const source = { pullRequest: expected.pullRequest, files: expected.files };
@@ -275,12 +354,54 @@ describe("artifact generation", () => {
       await writeFile(source, JSON.stringify(collection));
       await writeFile(draft, JSON.stringify(narrative));
       expect((await cli("build", source, draft, output)).code).toBe(0);
+      const reportOutput = join(directory, "reported.json");
+      const built = await cli("build", source, draft, reportOutput, "--report");
+      expect(built).toMatchObject({ code: 0, stderr: "" });
+      const report = JSON.parse(built.stdout);
+      const written = await Bun.file(reportOutput).json();
+      expect(written).toEqual(await Bun.file(output).json());
+      expect(report).toMatchObject({
+        artifactPath: reportOutput,
+        summary: written.summary,
+        sections: written.sections.map(
+          ({
+            title,
+            explanation,
+            references,
+          }: ReviewSnapshot["sections"][number]) => ({
+            title,
+            explanation,
+            references,
+          }),
+        ),
+        automaticallyUngrouped: written.sections.at(-1).references,
+      });
+      const validated = await cli("validate", source, reportOutput, "--report");
+      expect(validated).toMatchObject({ code: 0, stderr: "" });
+      const { automaticallyUngrouped: _added, ...expectedReport } = report;
+      expect(JSON.parse(validated.stdout)).toEqual(expectedReport);
+      written.pullRequest.headCommit = "tampered";
+      await writeFile(reportOutput, JSON.stringify(written));
+      expect(
+        await cli("validate", source, reportOutput, "--report"),
+      ).toMatchObject({
+        code: 1,
+        stdout: "",
+        stderr: expect.stringContaining("differ from collection"),
+      });
       expect(await cli("validate", source, output)).toMatchObject({
         code: 0,
         stderr: "",
       });
       expect(await cli("build", source, draft, output)).toMatchObject({
         code: 1,
+        stderr: expect.stringContaining("EEXIST"),
+      });
+      expect(
+        await cli("build", source, draft, output, "--report"),
+      ).toMatchObject({
+        code: 1,
+        stdout: "",
         stderr: expect.stringContaining("EEXIST"),
       });
       expect((await cli("validate", source, output, "extra")).stderr).toContain(

@@ -119,13 +119,15 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 
 ## Additional todos
 
-- [ ] Speed up review artifact creation: explore a lighter structure than JSON, change how code is referenced, and enforce fast models.
+- [ ] Speed up review artifact creation: compact inspection report implemented; benchmark model latency/quality and evaluate reference/format changes before selecting fast-model defaults.
 - [ ] Add a commenting feature.
 - [ ] Review Vim motions.
 - [ ] Redesign the main TUI layout and sections.
 - [ ] Launch the TUI automatically from the skill.
 
 ## Decisions and progress
+
+- Generation performance follow-up: Added optional trailing `--report` to artifact build/validation. It returns the final narrative, file identities and non-text limits, commit IDs, and successful validation results without captured diff text. Build reports identify the exact automatically added ungrouped references; validation reports omit provenance unavailable from an existing artifact. The shared skill now inspects this report against the complete collection already read and reopens specific hunks when needed. Successful builds already run full verification; standalone validation remains required after later artifact edits. Artifact version 1, default CLI output, collection completeness, and coverage semantics are unchanged. Offline replay of three local review snapshots reduced post-build inspection bytes by 80–86% versus formatted artifacts (79–85% versus compact JSON); this is a byte comparison, not a measured model latency or quality result. The committed real-PR fixture reduced inspection bytes by 62%. Faster-model and format experiments remain open.
 
 - Planning update: Before starting the web foundation, complete TUI theming, themed diffs, Mermaid diagram rendering with a Kitty graphics feasibility investigation, and basic Markdown formatting. GitHub Light and GitHub Dark are the initial provided themes, selected automatically from the system setting unless overridden. Existing artifact content and offline viewing remain supported. Former tasks 7–9 are now tasks 11–13; task 7 is the next implementation task.
 - Initial scaffold: Bun workspace, TypeScript, Biome, a self-contained JSON snapshot, and separate generation and viewing steps. The web viewer is launched with a local artifact path.
