@@ -21,10 +21,17 @@ import {
   readableTokenColor,
 } from "./highlight";
 
+import {
+  type ChangedSpans,
+  changedFileSpans,
+  emphasizeSpans,
+} from "./changed-spans";
+
 /** Layout owns presentation only; all rows come from resolved captured changes. */
 export class DiffView extends BoxRenderable {
   private files: FileRows[] = [];
   private syntax: HighlightedFile = new Map();
+  private changes: ChangedSpans = new Map();
   private preference: DiffMode = "auto";
   private palette: Theme;
   private painted: { node: TextRenderable; cell: DiffCell }[] = [];
@@ -55,6 +62,9 @@ export class DiffView extends BoxRenderable {
     this.anchorEpoch++;
     this.files = files;
     this.syntax = new Map(files.flatMap((file) => [...highlightFile(file)]));
+    this.changes = new Map(
+      files.flatMap((file) => [...changedFileSpans(file)]),
+    );
     this.preference = preference;
     this.rebuild();
   }
@@ -241,20 +251,33 @@ export class DiffView extends BoxRenderable {
           ),
           fg: RGBA.fromHex(changed ? foreground : theme.diff.lineNumber),
         },
-        ...(spans
+        ...(cell.line && cell.line.kind !== "no-newline"
           ? [
               {
                 __isChunk: true as const,
                 text: cell.text.slice(0, 1),
                 fg: RGBA.fromHex(foreground),
+                bg: RGBA.fromHex(background),
               },
-              ...spans.map((span) => ({
-                __isChunk: true as const,
-                text: span.text,
-                fg: RGBA.fromHex(
-                  readableTokenColor(span.color, foreground, background),
-                ),
-              })),
+              ...emphasizeSpans(
+                spans ?? [{ text: cell.text.slice(1) }],
+                this.changes.get(cell.line) ?? [],
+              ).map((span) => {
+                const actualBackground =
+                  span.changed && pair ? pair.spanBackground : background;
+                return {
+                  __isChunk: true as const,
+                  text: span.text,
+                  fg: RGBA.fromHex(
+                    readableTokenColor(
+                      span.color,
+                      foreground,
+                      actualBackground,
+                    ),
+                  ),
+                  bg: RGBA.fromHex(actualBackground),
+                };
+              }),
             ]
           : [
               {

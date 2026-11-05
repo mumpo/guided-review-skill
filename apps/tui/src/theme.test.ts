@@ -19,6 +19,8 @@ test("theme text pairs meet a 4.5:1 contrast ratio", () => {
       [theme.diff.text, theme.diff.background],
       [theme.diff.addition.foreground, theme.diff.addition.background],
       [theme.diff.deletion.foreground, theme.diff.deletion.background],
+      [theme.diff.addition.foreground, theme.diff.addition.spanBackground],
+      [theme.diff.deletion.foreground, theme.diff.deletion.spanBackground],
       [theme.diff.addition.foreground, diffGutterBackground(theme, "addition")],
       [theme.diff.deletion.foreground, diffGutterBackground(theme, "deletion")],
       [theme.diff.lineNumber, theme.surface],

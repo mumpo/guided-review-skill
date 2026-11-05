@@ -157,6 +157,11 @@ export function layoutFileRows(
 ): PresentationRow[] {
   if (mode === "inline")
     return file.rows.map((full, index) => ({ full, sources: [index] }));
+  return pairedFileRows(file);
+}
+
+/** Shared positional pairing for layout and within-line comparisons. */
+export function pairedFileRows(file: FileRows): PresentationRow[] {
   const result: PresentationRow[] = [];
   const cell = (row: DiffRow, side: "old" | "new"): DiffCell => ({
     line: row.line,

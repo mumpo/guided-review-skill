@@ -184,6 +184,8 @@ test("syntax colors remain readable on all diff backgrounds", () => {
       [theme.diff.context, theme.diff.background],
       [theme.diff.addition.foreground, theme.diff.addition.background],
       [theme.diff.deletion.foreground, theme.diff.deletion.background],
+      [theme.diff.addition.foreground, theme.diff.addition.spanBackground],
+      [theme.diff.deletion.foreground, theme.diff.deletion.spanBackground],
     ]) {
       expect(
         contrastRatio(
