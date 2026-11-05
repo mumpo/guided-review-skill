@@ -66,6 +66,7 @@ function object(value: unknown, path: string): ObjectValue {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return fail(path, "expected an object");
   }
+
   return value as ObjectValue;
 }
 
@@ -76,6 +77,7 @@ function string(value: unknown, path: string, nonempty = false): string {
       nonempty ? "expected a non-empty string" : "expected a string",
     );
   }
+
   return value;
 }
 
@@ -83,11 +85,13 @@ function positiveInteger(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
     return fail(path, "expected a positive safe integer");
   }
+
   return value;
 }
 
 function array(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) return fail(path, "expected an array");
+
   return value;
 }
 
@@ -99,6 +103,7 @@ function choice(
   if (typeof value !== "string" || !choices.includes(value)) {
     return fail(path, `expected one of: ${choices.join(", ")}`);
   }
+
   return value;
 }
 
@@ -106,7 +111,9 @@ function choice(
 export function validateSnapshot(value: unknown): ReviewSnapshot {
   const root = object(value, "$");
   if (root.version !== 1) fail("$.version", "unsupported version; expected 1");
+
   const pr = object(root.pullRequest, "$.pullRequest");
+
   for (const key of [
     "url",
     "owner",
@@ -118,21 +125,26 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
   ]) {
     string(pr[key], `$.pullRequest.${key}`, true);
   }
+
   string(pr.description, "$.pullRequest.description");
   positiveInteger(pr.number, "$.pullRequest.number");
   string(root.summary, "$.summary");
 
   const ids = new Set<string>();
+
   array(root.files, "$.files").forEach((entry, index) => {
     const path = `$.files[${index}]`;
     const file = object(entry, path);
     const id = string(file.id, `${path}.id`, true);
     if (ids.has(id))
       fail(`${path}.id`, `duplicate file ID ${JSON.stringify(id)}`);
+
     ids.add(id);
+
     for (const key of ["oldPath", "newPath"]) {
       if (file[key] !== null) string(file[key], `${path}.${key}`, true);
     }
+
     const status = choice(
       file.status,
       ["added", "modified", "deleted", "renamed"],
@@ -150,6 +162,7 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
       (file.oldPath === null || file.newPath === null)
     )
       fail(path, `${status} files require both paths`);
+
     const diff = object(file.diff, `${path}.diff`);
     const kind = choice(
       diff.kind,
@@ -164,6 +177,7 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
   array(root.sections, "$.sections").forEach((entry, index) => {
     const path = `$.sections[${index}]`;
     const section = object(entry, path);
+
     string(section.title, `${path}.title`, true);
     string(section.explanation, `${path}.explanation`);
     array(section.references, `${path}.references`).forEach(
@@ -173,9 +187,12 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
         const id = string(ref.fileId, `${refPath}.fileId`, true);
         if (!ids.has(id))
           fail(`${refPath}.fileId`, `unknown file ID ${JSON.stringify(id)}`);
+
         const kind = choice(ref.kind, ["file", "lines"], `${refPath}.kind`);
         if (kind === "file") return;
+
         choice(ref.side, ["old", "new"], `${refPath}.side`);
+
         const start = positiveInteger(ref.startLine, `${refPath}.startLine`);
         const end = positiveInteger(ref.endLine, `${refPath}.endLine`);
         if (end < start)
@@ -186,6 +203,7 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
       },
     );
   });
+
   return value as ReviewSnapshot;
 }
 
@@ -199,6 +217,7 @@ export function parseSnapshot(json: string): ReviewSnapshot {
       `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
   return validateSnapshot(value);
 }
 

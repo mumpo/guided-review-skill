@@ -4,8 +4,10 @@ import { diffGutterBackground, themes } from "./theme";
 function luminance(hex: string): number {
   const channels = [1, 3, 5].map((offset) => {
     const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
+
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
 }
 
@@ -38,8 +40,10 @@ test("theme text pairs meet a 4.5:1 contrast ratio", () => {
       ),
       [theme.markdown.code, theme.markdown.codeBackground],
     ];
+
     for (const [fg, bg] of pairs) {
       const values = [luminance(fg), luminance(bg)].sort((a, b) => b - a);
+
       expect((values[0] + 0.05) / (values[1] + 0.05)).toBeGreaterThanOrEqual(
         4.5,
       );
@@ -50,6 +54,7 @@ test("theme text pairs meet a 4.5:1 contrast ratio", () => {
 test("GitHub gutter colors retain alpha values and resolve over the diff canvas", () => {
   const light = themes["github-light"];
   const dark = themes["github-dark"];
+
   expect(light.diff.addition.gutterBackground).toBe("#aceebb");
   expect(light.diff.deletion.gutterBackground).toBe("#ffcecb");
   expect(dark.diff.addition.gutterBackground).toBe("#2ea04366");

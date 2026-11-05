@@ -54,7 +54,9 @@ export class ExplanationView extends BoxRenderable {
 
   setContent(content: string) {
     this.controller.abort();
+
     for (const child of this.getChildren()) child.destroyRecursively();
+
     this.links = markdownLinks(content);
     this.blocks = explanationBlocks(content).map((block) => {
       const node = new BoxRenderable(this.renderer, {
@@ -62,7 +64,9 @@ export class ExplanationView extends BoxRenderable {
         flexDirection: "column",
         flexShrink: 0,
       });
+
       this.add(node);
+
       return { block, node };
     });
     this.refresh(true);
@@ -92,6 +96,7 @@ export class ExplanationView extends BoxRenderable {
     const cellHeight = resolution
       ? resolution.height / this.renderer.height
       : 0;
+
     return {
       columns,
       cellWidth,
@@ -114,6 +119,7 @@ export class ExplanationView extends BoxRenderable {
       (node) => node.y <= top && node.y + node.height > top,
     );
     const release = anchor ? this.body.anchor(anchor) : undefined;
+
     change();
     if (release) this.body.afterLayout(release);
   }
@@ -124,13 +130,17 @@ export class ExplanationView extends BoxRenderable {
       markdown.setTheme(this.palette);
       return;
     }
+
     for (const child of node.getChildren()) child.destroyRecursively();
+
     if (!diagram) {
       const view = new MarkdownView(this.renderer, this.palette);
+
       view.setContent(content, this.links);
       node.add(view);
       return;
     }
+
     node.add(
       new TextRenderable(this.renderer, {
         content,
@@ -144,18 +154,23 @@ export class ExplanationView extends BoxRenderable {
 
   private refresh(force = false) {
     if (this.isDestroyed) return;
+
     const geometry = this.geometry();
     const signature = this.geometrySignature();
     if (!force && this.signature === signature) return;
+
     this.signature = signature;
     this.controller.abort();
     this.controller = new AbortController();
+
     const signal = this.controller.signal;
+
     this.preserve(() => {
       for (const { node, block } of this.blocks) {
         const reason = geometry.supported
           ? "rendering"
           : "terminal graphics unavailable";
+
         this.text(
           node,
           block.raw +
@@ -174,6 +189,7 @@ export class ExplanationView extends BoxRenderable {
     for (const { node, block } of this.blocks) {
       if (signal.aborted) return;
       if (block.kind !== "mermaid") continue;
+
       try {
         const width = Math.min(
           2048,
@@ -189,6 +205,7 @@ export class ExplanationView extends BoxRenderable {
             signal,
           });
           if (signal.aborted) return;
+
           const info = imageInfo(png);
           if (
             png.length > mermaidLimits.png ||
@@ -196,11 +213,14 @@ export class ExplanationView extends BoxRenderable {
             info.height > mermaidLimits.dimension
           )
             throw new Error("Mermaid image exceeds size limit");
+
           this.cache.set(key, png);
+
           while (this.cache.size > 4)
             this.cache.delete(this.cache.keys().next().value as string);
         }
         if (signal.aborted) return;
+
         const info = imageInfo(png);
         const columns = Math.max(
           1,
@@ -216,8 +236,10 @@ export class ExplanationView extends BoxRenderable {
               geometry.cellHeight,
           ),
         );
+
         this.preserve(() => {
           for (const child of node.getChildren()) child.destroyRecursively();
+
           node.add(
             new ImageRenderable(this.renderer, {
               source: png,
@@ -241,12 +263,14 @@ export class ExplanationView extends BoxRenderable {
         });
       } catch (error) {
         if (signal.aborted || node.isDestroyed) return;
+
         // Only our controlled diagnostics reach the terminal, never browser stderr.
         const reason =
           error instanceof Error &&
           /^(install Mermaid|Mermaid |empty Mermaid)/.test(error.message)
             ? error.message
             : "rendering failed";
+
         this.preserve(() =>
           this.text(node, `${block.raw}\n[Mermaid source: ${reason}]\n`, true),
         );

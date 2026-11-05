@@ -22,6 +22,7 @@ export function mountReview(
   const { snapshot, analysis } = review;
   const pr = snapshot.pullRequest;
   let page = 0;
+
   const root = new BoxRenderable(renderer, {
     id: "review",
     width: "100%",
@@ -30,12 +31,14 @@ export function mountReview(
     paddingLeft: 1,
     paddingRight: 1,
   });
+
   const heading = new TextRenderable(renderer, {
     id: "heading",
     content: "",
     wrapMode: "word",
     flexShrink: 0,
   });
+
   const body = new ScrollBoxRenderable(renderer, {
     id: "body",
     flexGrow: 1,
@@ -44,6 +47,7 @@ export function mountReview(
     scrollY: true,
     contentOptions: { flexDirection: "column" },
   });
+
   const narrative = new BoxRenderable(renderer, {
     id: "narrative",
     width: "100%",
@@ -52,6 +56,7 @@ export function mountReview(
   });
   let narrativeText: TextRenderable[] = [];
   let narrativeMarkdown: MarkdownView[] = [];
+
   function plain(content: string) {
     const node = new TextRenderable(renderer, {
       content,
@@ -62,9 +67,11 @@ export function mountReview(
       bg: theme.background,
       marginBottom: 1,
     });
+
     narrative.add(node);
     narrativeText.push(node);
   }
+
   function markdown(content: string) {
     const node = new MarkdownView(renderer, theme);
     node.marginBottom = 1;
@@ -72,11 +79,15 @@ export function mountReview(
     narrative.add(node);
     narrativeMarkdown.push(node);
   }
+
   body.add(narrative);
+
   const explanation = new ExplanationView(renderer, body, theme);
   body.add(explanation);
+
   const changes = new DiffView(renderer, body, theme);
   body.add(changes);
+
   const help = new TextRenderable(renderer, {
     id: "help",
     content:
@@ -84,6 +95,7 @@ export function mountReview(
     wrapMode: "word",
     flexShrink: 0,
   });
+
   root.add(heading);
   root.add(body);
   root.add(help);
@@ -96,11 +108,14 @@ export function mountReview(
     heading.fg = theme.navigation.foreground;
     heading.bg = theme.navigation.background;
     narrative.backgroundColor = theme.background;
+
     for (const node of narrativeText) {
       node.fg = theme.markdown.text;
       node.bg = theme.background;
     }
+
     for (const node of narrativeMarkdown) node.setTheme(theme);
+
     explanation.setTheme(theme);
     changes.setTheme(theme);
     help.fg = theme.muted;
@@ -116,28 +131,35 @@ export function mountReview(
       },
     };
   }
+
   applyTheme(theme);
 
   function updateHelp() {
     help.content = `n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | d: diff ${diffMode} | q/Ctrl+C: quit`;
   }
+
   updateHelp();
 
   function showPage() {
     const section = snapshot.sections[page - 1];
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${page === 0 ? "Summary" : `Section ${page}/${snapshot.sections.length}: ${section.title}`}\n`;
+
     for (const child of narrative.getChildren()) child.destroyRecursively();
+
     narrativeText = [];
     narrativeMarkdown = [];
+
     if (page === 0) {
       changes.setFiles([], diffMode);
       explanation.setContent("");
+
       const limits = snapshot.files
         .filter((file) => file.diff.kind !== "text")
         .map(
           (file) =>
             `${file.newPath ?? file.oldPath}: ${file.diff.kind === "unavailable" ? `unavailable (${file.diff.reason})` : "binary"}`,
         );
+
       plain(
         [
           pr.title,
@@ -161,7 +183,9 @@ export function mountReview(
     } else {
       plain(section.title);
       explanation.setContent(section.explanation || "(No explanation)");
+
       const files = sectionDiffRows(analysis.sections[page - 1]);
+
       changes.setFiles(
         files.length
           ? files
@@ -175,6 +199,7 @@ export function mountReview(
         diffMode,
       );
     }
+
     body.scrollTo(0);
   }
 
@@ -184,7 +209,9 @@ export function mountReview(
       return;
     }
     if (key.ctrl || key.meta || key.option) return;
+
     let nextPage = page;
+
     switch (key.name) {
       case "d": {
         const modes: DiffMode[] = ["auto", "inline", "side-by-side"];
@@ -228,6 +255,7 @@ export function mountReview(
       default:
         return;
     }
+
     key.preventDefault();
     nextPage = Math.max(0, Math.min(snapshot.sections.length, nextPage));
     if (page !== nextPage) {
@@ -237,11 +265,14 @@ export function mountReview(
   }
 
   renderer.keyInput.on("keypress", onKey);
+
   const onResize = () => {
     changes.resizeLayout();
     explanation.resizeLayout();
   };
+
   const onCapabilities = () => explanation.resizeLayout();
+
   renderer.on("capabilities", onCapabilities);
   renderer.on("resize", onResize);
   renderer.once("destroy", () => {
@@ -250,5 +281,6 @@ export function mountReview(
     renderer.off("capabilities", onCapabilities);
   });
   showPage();
+
   return applyTheme;
 }

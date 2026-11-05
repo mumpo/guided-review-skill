@@ -19,10 +19,13 @@ test.skipIf(process.env.GUIDED_REVIEW_MERMAID_INTEGRATION !== "1")(
           signal: new AbortController().signal,
         });
         const image = NativeImage.decode(png);
+
         try {
           expect(image.width).toBeGreaterThan(20);
           expect(image.height).toBeGreaterThan(20);
+
           const pixel = image.raw().data.slice(0, 3);
+
           expect([...pixel]).toEqual(
             [1, 3, 5].map((offset) =>
               Number.parseInt(theme.background.slice(offset, offset + 2), 16),
@@ -33,11 +36,13 @@ test.skipIf(process.env.GUIDED_REVIEW_MERMAID_INTEGRATION !== "1")(
         }
       }
     }
+
     const request = {
       theme: themes["github-dark"],
       width: 640,
       signal: new AbortController().signal,
     };
+
     await expect(
       renderDiagram({ ...request, source: "this is not a Mermaid diagram" }),
     ).rejects.toThrow("Mermaid rendering failed");

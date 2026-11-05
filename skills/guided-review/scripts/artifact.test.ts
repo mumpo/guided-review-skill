@@ -16,10 +16,12 @@ import {
 import realPrFixture from "../fixtures/cli-pr-1.json";
 
 const typedFixture = validateSnapshot(fixture);
+
 const collection = {
   pullRequest: typedFixture.pullRequest,
   files: typedFixture.files,
 };
+
 const narrative = {
   summary: typedFixture.summary,
   sections: typedFixture.sections,
@@ -28,6 +30,7 @@ const narrative = {
 describe("artifact generation", () => {
   test("report preserves the final narrative and inspection limits without captured diff text", () => {
     const { snapshot, report } = buildArtifactWithReport(collection, narrative);
+
     expect(snapshot).toEqual(buildArtifact(collection, narrative));
     expect(report).toMatchObject({
       validation: {
@@ -86,6 +89,7 @@ describe("artifact generation", () => {
     };
     const original = structuredClone(draft);
     const { snapshot, report } = buildArtifactWithReport(collection, draft);
+
     expect(report.automaticallyUngrouped).toEqual(
       snapshot.sections[0].references.slice(1),
     );
@@ -94,10 +98,12 @@ describe("artifact generation", () => {
       fileId: "image",
     });
     expect(draft).toEqual(original);
+
     const complete = buildArtifactWithReport(collection, {
       summary: snapshot.summary,
       sections: snapshot.sections,
     });
+
     expect(complete.report.automaticallyUngrouped).toEqual([]);
   });
 
@@ -106,6 +112,7 @@ describe("artifact generation", () => {
     const source = { pullRequest: expected.pullRequest, files: expected.files };
     const draft = { summary: expected.summary, sections: expected.sections };
     const result = buildArtifact(source, draft);
+
     expect(result).toEqual(expected);
     expect(result.sections).toHaveLength(2);
     expect(analyzeDiffs(result)).toMatchObject({
@@ -135,6 +142,7 @@ describe("artifact generation", () => {
       summary: "Uncertain replacement.",
       sections: [],
     });
+
     expect(result.sections[0].references).toEqual([
       {
         kind: "lines",
@@ -157,8 +165,10 @@ describe("artifact generation", () => {
   test("preserves source data, split-file/multi-file section ordering, and explanation fences", () => {
     const draft = structuredClone(narrative);
     draft.sections[0].explanation += "\n\n```mermaid\nflowchart LR\nA-->B\n```";
+
     const original = structuredClone(draft);
     const result = buildArtifact(collection, draft);
+
     expect(result.pullRequest).toEqual(collection.pullRequest);
     expect(result.files).toEqual(collection.files);
     expect(result.sections.slice(0, 3)).toEqual(draft.sections);
@@ -183,6 +193,7 @@ describe("artifact generation", () => {
 
   test("adds exact missing old/new ranges and binary/unavailable/metadata markers", () => {
     const withMode = structuredClone(collection);
+
     withMode.files.push({
       id: "mode",
       oldPath: "run.sh",
@@ -194,10 +205,12 @@ describe("artifact generation", () => {
           "diff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n",
       },
     });
+
     const result = buildArtifact(withMode, {
       summary: "Grouping is uncertain.",
       sections: [],
     });
+
     expect(result.sections).toHaveLength(1);
     expect(result.sections[0].title).toBe("Ungrouped changes");
     expect(result.sections[0].references).toEqual([
@@ -249,6 +262,7 @@ describe("artifact generation", () => {
       ],
     };
     const result = buildArtifact(collection, draft);
+
     expect(result.sections).toHaveLength(1);
     expect(result.sections[0].explanation).toContain(
       "Image intent is unknown.",
@@ -259,6 +273,7 @@ describe("artifact generation", () => {
 
   test("rejects context-only, unknown, and non-text references with useful locations", () => {
     const draft = () => structuredClone(narrative);
+
     const context = draft();
     context.sections[0].references = [
       {
@@ -269,13 +284,18 @@ describe("artifact generation", () => {
         endLine: 2,
       },
     ];
+
     expect(() => buildArtifact(collection, context)).toThrow(
       "$.sections[0].references[0]: Range selects no changed new lines",
     );
+
     const unknown = draft();
     unknown.sections[0].references[0].fileId = "missing";
+
     expect(() => buildArtifact(collection, unknown)).toThrow("unknown file ID");
+
     context.sections[0].references[0].fileId = "image";
+
     expect(() => buildArtifact(collection, context)).toThrow(
       "Line reference requires a text diff",
     );
@@ -288,18 +308,24 @@ describe("artifact generation", () => {
     expect(() =>
       buildArtifact(collection, { ...narrative, files: [] }),
     ).toThrow("narrative.files");
+
     const blank = structuredClone(narrative);
     blank.sections[0].explanation = "";
+
     expect(() => buildArtifact(collection, blank)).toThrow(
       "$.sections[0].explanation",
     );
+
     blank.sections[0].explanation = "A change.";
     blank.sections[0].references = [];
+
     expect(() => buildArtifact(collection, blank)).toThrow(
       "expected actual changes",
     );
+
     blank.sections[0].title = "Ungrouped changes";
     blank.sections[0].references = narrative.sections[0].references;
+
     expect(() => buildArtifact(collection, blank)).toThrow(
       "Ungrouped changes must be last",
     );
@@ -307,6 +333,7 @@ describe("artifact generation", () => {
 
   test("offline validation detects source tampering and missing coverage", () => {
     const result = buildArtifact(collection, narrative);
+
     for (const mutate of [
       (value: ReviewSnapshot) => {
         value.pullRequest.headCommit = "different";
@@ -322,11 +349,14 @@ describe("artifact generation", () => {
       // Removing sections keeps the tamper check independent of invalid file references.
       altered.sections = [];
       mutate(altered);
+
       expect(() => verifyArtifact(collection, altered)).toThrow(
         "differ from collection",
       );
     }
+
     result.sections.pop();
+
     expect(() => verifyArtifact(collection, result)).toThrow(
       "Uncovered changes in guide",
     );
@@ -347,18 +377,26 @@ describe("artifact generation", () => {
         new Response(process.stderr).text(),
         process.exited,
       ]);
+
       return { stdout, stderr, code };
     };
+
     const processExecPath = process.execPath;
+
     try {
       await writeFile(source, JSON.stringify(collection));
       await writeFile(draft, JSON.stringify(narrative));
+
       expect((await cli("build", source, draft, output)).code).toBe(0);
+
       const reportOutput = join(directory, "reported.json");
       const built = await cli("build", source, draft, reportOutput, "--report");
+
       expect(built).toMatchObject({ code: 0, stderr: "" });
+
       const report = JSON.parse(built.stdout);
       const written = await Bun.file(reportOutput).json();
+
       expect(written).toEqual(await Bun.file(output).json());
       expect(report).toMatchObject({
         artifactPath: reportOutput,
@@ -376,12 +414,18 @@ describe("artifact generation", () => {
         ),
         automaticallyUngrouped: written.sections.at(-1).references,
       });
+
       const validated = await cli("validate", source, reportOutput, "--report");
+
       expect(validated).toMatchObject({ code: 0, stderr: "" });
+
       const { automaticallyUngrouped: _added, ...expectedReport } = report;
+
       expect(JSON.parse(validated.stdout)).toEqual(expectedReport);
+
       written.pullRequest.headCommit = "tampered";
       await writeFile(reportOutput, JSON.stringify(written));
+
       expect(
         await cli("validate", source, reportOutput, "--report"),
       ).toMatchObject({
@@ -407,13 +451,16 @@ describe("artifact generation", () => {
       expect((await cli("validate", source, output, "extra")).stderr).toContain(
         "Usage:",
       );
+
       await writeFile(draft, "{");
+
       const invalid = await cli(
         "build",
         source,
         draft,
         join(directory, "bad.json"),
       );
+
       expect(invalid.code).toBe(1);
       expect(invalid.stderr).toContain(draft);
       expect(await Bun.file(join(directory, "bad.json")).exists()).toBe(false);

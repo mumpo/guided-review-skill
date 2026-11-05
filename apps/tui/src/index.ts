@@ -9,6 +9,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     console.log(usage);
     return;
   }
+
   const preferences = await loadPreferences(options);
 
   // Validate before loading native UI code or taking control of the terminal.
@@ -16,6 +17,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error("The viewer needs an interactive terminal (TTY).");
   }
+
   const { createCliRenderer } = await import("@opentui/core");
   const { mountReview } = await import("./view");
   const { startTheme } = await import("./theme-session");
@@ -25,8 +27,10 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     consoleMode: "disabled",
     useMouse: false,
   });
+
   try {
     let applyTheme: ReturnType<typeof mountReview> | undefined;
+
     await startTheme(renderer, preferences.theme, (theme) => {
       if (applyTheme) applyTheme(theme);
       else

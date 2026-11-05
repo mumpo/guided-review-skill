@@ -37,17 +37,21 @@ export class DiffParseError extends Error {
 /** Parse a single file's unified diff without losing any supplied text. */
 export function parseDiff(file: DiffFile): ParsedDiff {
   if (file.diff.kind !== "text") return file.diff;
+
   const rawLines = file.diff.unified.match(/[^\n]*\n|[^\n]+$/g) ?? [];
   const content = (line: string) => line.replace(/\r?\n$/, "");
+
   const error = (message: string): never => {
     throw new DiffParseError(file.id, message);
   };
+
   const header: string[] = [];
   const hunks: DiffHunk[] = [];
   let index = 0;
   let hasGitHeader = false;
   let hasOldHeader = false;
   let hasNewHeader = false;
+
   while (
     index < rawLines.length &&
     !content(rawLines[index]).startsWith("@@")
@@ -56,14 +60,17 @@ export function parseDiff(file: DiffFile): ParsedDiff {
     if (line.startsWith("diff --git ")) {
       if (hasGitHeader || header.length > 0)
         error("multiple or misplaced file headers");
+
       hasGitHeader = true;
     } else if (line.startsWith("--- ")) {
       if (hasOldHeader || hasNewHeader)
         error("multiple or misplaced old file headers");
+
       hasOldHeader = true;
     } else if (line.startsWith("+++ ")) {
       if (!hasOldHeader || hasNewHeader)
         error("multiple or misplaced new file headers");
+
       hasNewHeader = true;
     } else if (
       !/^(index |old mode |new mode |new file mode |deleted file mode |similarity index |dissimilarity index |rename from |rename to |copy from |copy to )/.test(
@@ -73,18 +80,23 @@ export function parseDiff(file: DiffFile): ParsedDiff {
     ) {
       error(`unsupported diff content at line ${index + 1}: ${line}`);
     }
+
     header.push(rawLines[index++]);
   }
+
   if (hasOldHeader !== hasNewHeader) error("incomplete file headers");
   if (header.length === 0 && rawLines.length === 0) error("empty diff");
+
   let previousOldEnd = 0;
   let previousNewEnd = 0;
+
   while (index < rawLines.length) {
     const rawHeader = rawLines[index++];
     const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?:.*)$/.exec(
       content(rawHeader),
     );
     if (!match) error(`expected hunk header at line ${index}`);
+
     const [, oldStartText, oldCountText, newStartText, newCountText] =
       match as RegExpExecArray;
     const oldStart = Number(oldStartText);
@@ -99,6 +111,7 @@ export function parseDiff(file: DiffFile): ParsedDiff {
       newStart + (newCount === 0 ? 1 : 0) < previousNewEnd
     )
       error(`invalid or overlapping hunk at line ${index}`);
+
     const hunk: DiffHunk = {
       header: rawHeader,
       oldStart,
@@ -109,6 +122,7 @@ export function parseDiff(file: DiffFile): ParsedDiff {
     };
     let oldUsed = 0;
     let newUsed = 0;
+
     while (index < rawLines.length) {
       const raw = rawLines[index];
       const line = content(raw);
@@ -117,6 +131,7 @@ export function parseDiff(file: DiffFile): ParsedDiff {
         const previous = hunk.lines.at(-1);
         if (!previous || previous.kind === "no-newline")
           error(`misplaced no-newline marker at line ${index + 1}`);
+
         hunk.lines.push({
           kind: "no-newline",
           raw,
@@ -126,15 +141,18 @@ export function parseDiff(file: DiffFile): ParsedDiff {
         index++;
         continue;
       }
+
       const prefix = line[0];
       if (prefix !== " " && prefix !== "+" && prefix !== "-")
         error(`unsupported hunk content at line ${index + 1}: ${line}`);
       if (oldUsed === oldCount && newUsed === newCount)
         error(`extra hunk content at line ${index + 1}`);
+
       const oldLine = prefix === "+" ? null : oldStart + oldUsed++;
       const newLine = prefix === "-" ? null : newStart + newUsed++;
       if (oldUsed > oldCount || newUsed > newCount)
         error(`hunk line counts exceeded at line ${index + 1}`);
+
       hunk.lines.push({
         kind:
           prefix === " " ? "context" : prefix === "+" ? "addition" : "deletion",
@@ -144,14 +162,17 @@ export function parseDiff(file: DiffFile): ParsedDiff {
       });
       index++;
     }
+
     if (oldUsed !== oldCount || newUsed !== newCount)
       error(
         `truncated hunk: expected ${oldCount} old and ${newCount} new lines, got ${oldUsed} and ${newUsed}`,
       );
+
     previousOldEnd = oldStart + (oldCount === 0 ? 1 : oldCount);
     previousNewEnd = newStart + (newCount === 0 ? 1 : newCount);
     hunks.push(hunk);
   }
+
   return { kind: "text", header, hunks };
 }
 
@@ -188,8 +209,10 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
   const covered = new Set<DiffLine>();
   const coveredFiles = new Set<string>();
   const invalidReferences: ReferenceDiagnostic[] = [];
+
   const sections = snapshot.sections.map((section, sectionIndex) => {
     const resolved: ResolvedReference[] = [];
+
     section.references.forEach((reference, referenceIndex) => {
       const file = byId.get(reference.fileId);
       const invalid = (message: string) =>
@@ -200,9 +223,12 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
       }
       if (reference.kind === "file") {
         coveredFiles.add(reference.fileId);
+
         const hunks = file.diff.kind === "text" ? file.diff.hunks : [];
+
         for (const hunk of hunks)
           for (const line of hunk.lines) covered.add(line);
+
         resolved.push({ referenceIndex, file, hunks });
         return;
       }
@@ -212,9 +238,11 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
         );
         return;
       }
+
       const hunks = file.diff.hunks.flatMap((hunk) => {
         const selected = (line: DiffLine) => {
           const number = reference.side === "old" ? line.oldLine : line.newLine;
+
           return (
             line.kind ===
               (reference.side === "old" ? "deletion" : "addition") &&
@@ -223,6 +251,7 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
             number <= reference.endLine
           );
         };
+
         const lines = hunk.lines.filter(
           (line, index) =>
             selected(line) ||
@@ -230,6 +259,7 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
               index > 0 &&
               selected(hunk.lines[index - 1])),
         );
+
         return lines.length ? [{ ...hunk, lines }] : [];
       });
       if (!hunks.length) {
@@ -238,19 +268,26 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
         );
         return;
       }
+
       for (const hunk of hunks)
         for (const line of hunk.lines) covered.add(line);
+
       resolved.push({ referenceIndex, file, hunks });
     });
+
     return resolved;
   });
+
   const uncovered: UncoveredFile[] = [];
+
   for (const { file, diff } of files) {
     if (diff.kind !== "text") {
       if (!coveredFiles.has(file.id))
         uncovered.push({ fileId: file.id, kind: diff.kind, lines: [] });
+
       continue;
     }
+
     const lines = diff.hunks.flatMap((hunk) =>
       hunk.lines.filter(
         (line) =>
@@ -261,5 +298,6 @@ export function analyzeDiffs(snapshot: ReviewSnapshot): DiffAnalysis {
     if (lines.length || (diff.hunks.length === 0 && !coveredFiles.has(file.id)))
       uncovered.push({ fileId: file.id, kind: "text", lines });
   }
+
   return { files, sections, invalidReferences, uncovered };
 }

@@ -23,6 +23,7 @@ export const runGh: GhRunner = async (args) => {
   } catch (error) {
     throw new Error(`Could not start gh; install GitHub CLI: ${String(error)}`);
   }
+
   const [stdout, stderr, code] = await Promise.all([
     new Response(process.stdout).text(),
     new Response(process.stderr).text(),
@@ -33,25 +34,33 @@ export const runGh: GhRunner = async (args) => {
       `gh failed (${code}): ${stderr.trim() || "check authentication and PR access"}`,
     );
   }
+
   return stdout;
 };
 
 type Obj = Record<string, unknown>;
+
 function object(value: unknown, label: string): Obj {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error(`${label}: expected an object`);
+
   return value as Obj;
 }
+
 function str(value: unknown, label: string): string {
   if (typeof value !== "string" || !value.trim())
     throw new Error(`${label}: expected a non-empty string`);
+
   return value;
 }
+
 function count(value: unknown, label: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0)
     throw new Error(`${label}: expected a non-negative integer`);
+
   return value as number;
 }
+
 function json(text: string, label: string): unknown {
   try {
     return JSON.parse(text);
@@ -69,6 +78,7 @@ function gitPath(path: string): string {
     )
   )
     return path;
+
   let result = '"';
   const escapes: Record<number, string> = {
     7: "a",
@@ -81,12 +91,14 @@ function gitPath(path: string): string {
     34: '"',
     92: "\\",
   };
+
   for (const byte of bytes) {
     if (escapes[byte]) result += `\\${escapes[byte]}`;
     else if (byte < 32 || byte >= 127)
       result += `\\${byte.toString(8).padStart(3, "0")}`;
     else result += String.fromCharCode(byte);
   }
+
   return `${result}"`;
 }
 
@@ -101,6 +113,7 @@ export async function collectPullRequest(
   } catch {
     throw new Error("Expected a GitHub pull request URL");
   }
+
   const match = /^\/([^/]+)\/([^/]+)\/pull\/([1-9]\d*)\/?$/.exec(
     parsed.pathname,
   );
@@ -118,13 +131,16 @@ export async function collectPullRequest(
       "Expected a GitHub.com pull request URL: https://github.com/OWNER/REPO/pull/NUMBER",
     );
   }
+
   const [, owner, repository, numberText] = match;
   const number = Number(numberText);
   if (!Number.isSafeInteger(number))
     throw new Error("Invalid pull request number");
+
   const endpoint = `repos/${owner}/${repository}/pulls/${number}`;
   const metadata = async () =>
     object(json(await run(["api", endpoint]), "PR metadata"), "PR metadata");
+
   const first = await metadata();
   const baseCommit = str(object(first.base, "base").sha, "base.sha");
   const headCommit = str(object(first.head, "head").sha, "head.sha");
@@ -133,9 +149,11 @@ export async function collectPullRequest(
     throw new Error(
       "GitHub's file list is limited to 3,000 files; cannot collect a complete PR",
     );
+
   const description = first.body === null ? "" : first.body;
   if (typeof description !== "string")
     throw new Error("body: expected a string or null");
+
   const pullRequest: CollectedPullRequest["pullRequest"] = {
     url: `https://github.com/${owner}/${repository}/pull/${number}`,
     owner,
@@ -147,7 +165,9 @@ export async function collectPullRequest(
     baseCommit,
     headCommit,
   };
+
   const entries: Obj[] = [];
+
   for (let page = 1; entries.length < fileCount; page++) {
     const value = json(
       await run(["api", `${endpoint}/files?per_page=100&page=${page}`]),
@@ -155,10 +175,13 @@ export async function collectPullRequest(
     );
     if (!Array.isArray(value) || value.length === 0 || value.length > 100)
       throw new Error("Incomplete or invalid PR file list");
+
     entries.push(...value.map((entry) => object(entry, "PR file")));
   }
+
   if (entries.length !== fileCount)
     throw new Error("PR file count does not match metadata");
+
   const rawDiff = await run([
     "api",
     "-H",
@@ -171,14 +194,18 @@ export async function collectPullRequest(
     throw new Error(
       "Incomplete or unrecognized PR diff: file count does not match",
     );
+
   const seen = new Set<string>();
   const files = entries.map((entry, index): DiffFile => {
     const path = str(entry.filename, `files[${index}].filename`);
     if (seen.has(path)) throw new Error(`Duplicate file path: ${path}`);
+
     seen.add(path);
+
     const status = str(entry.status, `files[${index}].status`);
     if (!["added", "removed", "modified", "renamed"].includes(status))
       throw new Error(`Unsupported file status ${status} for ${path}`);
+
     const oldName =
       status === "renamed"
         ? str(entry.previous_filename, `files[${index}].previous_filename`)
@@ -191,6 +218,7 @@ export async function collectPullRequest(
       header !== `diff --git ${gitPath(`a/${oldName}`)} ${gitPath(`b/${path}`)}`
     )
       throw new Error(`Diff header does not match file ${path}`);
+
     const binary = /^Binary files .* differ\r?$/m.test(chunk);
     const file: DiffFile = {
       id: `file-${index + 1}`,
@@ -206,6 +234,7 @@ export async function collectPullRequest(
       const diff = parseDiff(file);
       if (diff.kind !== "text")
         throw new Error(`Expected text diff for ${path}`);
+
       const lines = diff.hunks.flatMap((hunk) => hunk.lines);
       if (
         lines.filter((line) => line.kind === "addition").length !== additions ||
@@ -215,13 +244,16 @@ export async function collectPullRequest(
           `Incomplete diff for ${path}: changed line counts do not match`,
         );
     }
+
     return file;
   });
+
   const last = await metadata();
   if (
     str(object(last.base, "base").sha, "base.sha") !== baseCommit ||
     str(object(last.head, "head").sha, "head.sha") !== headCommit
   )
     throw new Error("PR base or head commit changed during collection; retry");
+
   return { pullRequest, files };
 }

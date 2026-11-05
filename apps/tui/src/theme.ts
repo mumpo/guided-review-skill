@@ -1,4 +1,5 @@
 export type ThemeName = "github-light" | "github-dark";
+
 export type ThemePreference = ThemeName | "auto";
 
 /** Semantic colors shared by narrative, diagrams, and diffs. */
@@ -139,6 +140,7 @@ export function diffGutterBackground(
 ): string {
   const color = theme.diff[role].gutterBackground;
   if (color.length !== 9) return color;
+
   const alpha = Number.parseInt(color.slice(7, 9), 16) / 255;
   const channels = [1, 3, 5].map((offset) => {
     const foreground = Number.parseInt(color.slice(offset, offset + 2), 16);
@@ -146,9 +148,11 @@ export function diffGutterBackground(
       theme.diff.background.slice(offset, offset + 2),
       16,
     );
+
     return Math.round(foreground * alpha + background * (1 - alpha))
       .toString(16)
       .padStart(2, "0");
   });
+
   return `#${channels.join("")}`;
 }

@@ -17,16 +17,20 @@ export async function startTheme(
 ): Promise<void> {
   if (preference !== "auto") {
     if (!renderer.isDestroyed) apply(themes[preference]);
+
     return;
   }
+
   let ready = false;
   let latest = renderer.themeMode;
   const onMode = (mode: "light" | "dark") => {
     latest = mode;
     if (ready && !renderer.isDestroyed) apply(themeForMode(mode));
   };
+
   renderer.on("theme_mode", onMode);
   renderer.once("destroy", () => renderer.off("theme_mode", onMode));
+
   const detected = latest ?? (await renderer.waitForThemeMode(300));
   ready = true;
   if (!renderer.isDestroyed) apply(themeForMode(latest ?? detected));

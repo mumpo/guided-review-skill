@@ -100,6 +100,7 @@ export class DiffView extends BoxRenderable {
     const top = this.body.viewport.y;
     const anchor = this.logical.find(({ node }) => node.y + node.height > top);
     const oldY = anchor?.node.y;
+
     change();
     if (
       !anchor ||
@@ -108,8 +109,10 @@ export class DiffView extends BoxRenderable {
       oldY > top
     )
       return;
+
     this.body.afterLayout(() => {
       if (epoch !== this.anchorEpoch) return;
+
       const next = this.logical.find(
         (row) =>
           row.file === anchor.file &&
@@ -121,11 +124,13 @@ export class DiffView extends BoxRenderable {
 
   private rebuild() {
     for (const child of this.getChildren()) child.destroyRecursively();
+
     this.painted = [];
     this.fills = [];
     this.logical = [];
     this.signature = this.layoutSignature();
     if (!this.files.length) return;
+
     this.add(
       new TextRenderable(this.renderer, { content: "\n", flexShrink: 0 }),
     );
@@ -138,11 +143,13 @@ export class DiffView extends BoxRenderable {
             flexShrink: 0,
           }),
         );
+
       const mode = effectiveDiffMode(
         file,
         this.preference,
         this.availableWidth(),
       );
+
       for (const row of layoutFileRows(file, mode)) {
         let node: BoxRenderable | TextRenderable;
         if (row.full) {
@@ -176,11 +183,13 @@ export class DiffView extends BoxRenderable {
             alignItems: "stretch",
             flexShrink: 0,
           });
+
           for (const [index, cell] of [row.left, row.right].entries()) {
             if (index)
               node.add(
                 this.text({ text: " │ ", prefix: "", role: "marker" }, 3),
               );
+
             const pane = new BoxRenderable(this.renderer, {
               flexGrow: 1,
               flexBasis: 0,
@@ -195,9 +204,11 @@ export class DiffView extends BoxRenderable {
                   this.text({ text: cell.marker, prefix: "", role: "marker" }),
                 );
             }
+
             node.add(pane);
           }
         }
+
         this.add(node);
         this.logical.push({ node, file: file.id, sources: row.sources });
       }
@@ -213,19 +224,23 @@ export class DiffView extends BoxRenderable {
       wrapMode: "char",
       flexShrink: 0,
     });
+
     this.painted.push({ node, cell });
+
     return node;
   }
 
   setTheme(theme: Theme) {
     this.palette = theme;
     this.backgroundColor = theme.diff.background;
+
     for (const { node, role } of this.fills) {
       node.backgroundColor =
         role === "addition" || role === "deletion"
           ? theme.diff[role].background
           : theme.diff.background;
     }
+
     for (const { node, cell } of this.painted) {
       const changed = cell.role === "addition" || cell.role === "deletion";
       const pair = changed
@@ -235,6 +250,7 @@ export class DiffView extends BoxRenderable {
       const background = pair?.background ?? theme.diff.background;
       node.fg = foreground;
       node.bg = background;
+
       const spans =
         cell.line && cell.side
           ? this.syntax.get(cell.line)?.[cell.side]?.[theme.name]
@@ -265,6 +281,7 @@ export class DiffView extends BoxRenderable {
               ).map((span) => {
                 const actualBackground =
                   span.changed && pair ? pair.spanBackground : background;
+
                 return {
                   __isChunk: true as const,
                   text: span.text,
@@ -292,6 +309,7 @@ export class DiffView extends BoxRenderable {
 
   private foreground(role: RowRole) {
     const diff = this.palette.diff;
+
     return role === "file"
       ? diff.file
       : role === "hunk"

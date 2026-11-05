@@ -63,6 +63,7 @@ export function languageForPath(path?: string | null): string | undefined {
   const name = path?.split("/").pop() ?? "";
   const dot = name.lastIndexOf(".");
   const extension = name.slice(dot + 1).toLowerCase();
+
   return dot > 0 && Object.hasOwn(extensions, extension)
     ? extensions[extension]
     : undefined;
@@ -74,6 +75,7 @@ export function languageForFence(info = ""): string | undefined {
   if (name === "c++") return "cpp";
   if (name === "shell") return "shellscript";
   if (Object.hasOwn(extensions, name)) return extensions[name];
+
   return Object.values(extensions).includes(name) ? name : undefined;
 }
 
@@ -81,11 +83,13 @@ export interface SyntaxSpan {
   text: string;
   color?: string;
 }
+
 export type Tokenizer = (
   source: string,
   language: string,
   theme: ThemeName,
 ) => SyntaxSpan[][];
+
 export type HighlightedFile = Map<
   DiffLine,
   Partial<Record<"old" | "new", Record<ThemeName, SyntaxSpan[]>>>
@@ -93,6 +97,7 @@ export type HighlightedFile = Map<
 
 let highlighter: ReturnType<typeof createHighlighterCoreSync> | undefined;
 let unavailable = false;
+
 const tokenize: Tokenizer = (source, language, theme) => {
   if (unavailable) throw new Error("Highlighter unavailable");
   if (!highlighter) {
@@ -125,9 +130,11 @@ const tokenize: Tokenizer = (source, language, theme) => {
       });
     } catch (error) {
       unavailable = true;
+
       throw error;
     }
   }
+
   return highlighter
     .codeToTokens(source, { lang: language, theme })
     .tokens.map((line) =>
@@ -142,9 +149,12 @@ export function highlightSource(
   tokenizer: Tokenizer = tokenize,
 ): Record<ThemeName, SyntaxSpan[][]> | undefined {
   if (!language) return;
+
   const bodies = source.split("\n");
+
   try {
     const colors = {} as Record<ThemeName, SyntaxSpan[][]>;
+
     for (const theme of ["github-light", "github-dark"] as const) {
       const lines = tokenizer(source, language, theme);
       if (
@@ -159,8 +169,10 @@ export function highlightSource(
         )
       )
         return;
+
       colors[theme] = lines;
     }
+
     return colors;
   } catch {
     // Highlighting must never prevent reading captured content.
@@ -174,6 +186,7 @@ export function highlightFile(
   tokenizer: Tokenizer = tokenize,
 ): HighlightedFile {
   const result: HighlightedFile = new Map();
+
   for (const side of ["old", "new"] as const) {
     const language = languageForPath(
       side === "old"
@@ -181,9 +194,11 @@ export function highlightFile(
         : (file.newPath ?? file.oldPath),
     );
     if (!language) continue;
+
     let fragment: DiffLine[] = [];
     const flush = () => {
       if (!fragment.length) return;
+
       const bodies = fragment.map((line) =>
         line.raw.replace(/\r?\n$/, "").slice(1),
       );
@@ -198,8 +213,10 @@ export function highlightFile(
           result.set(line, entry);
         });
       }
+
       fragment = [];
     };
+
     for (const row of file.rows) {
       const line = row.line;
       if (line?.kind === "no-newline") continue;
@@ -213,8 +230,10 @@ export function highlightFile(
       )
         fragment.push(line);
     }
+
     flush();
   }
+
   return result;
 }
 
@@ -222,15 +241,19 @@ export function contrastRatio(foreground: string, background: string): number {
   const luminance = (hex: string) => {
     const channels = [1, 3, 5].map((offset) => {
       const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+
       return value <= 0.04045
         ? value / 12.92
         : ((value + 0.055) / 1.055) ** 2.4;
     });
+
     return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
   };
+
   const values = [luminance(foreground), luminance(background)].sort(
     (a, b) => b - a,
   );
+
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
@@ -259,12 +282,15 @@ export function readableTokenColor(
           .padStart(2, "0"),
       )
       .join("")}`;
+
   let low = 0;
   let high = 1;
+
   for (let step = 0; step < 16; step++) {
     const middle = (low + high) / 2;
     if (contrastRatio(mix(middle), background) >= 4.5) high = middle;
     else low = middle;
   }
+
   return mix(high);
 }

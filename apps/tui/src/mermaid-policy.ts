@@ -29,11 +29,14 @@ export async function allowedMermaidRequest(
     if (url.protocol === "file:")
       return (await realpath(fileURLToPath(url))) === entry;
     if (url.origin !== "https://mermaid-cli-intercept.invalid") return false;
+
     const target = await realpath(decodeURIComponent(url.pathname));
+
     return (
       /\.(?:css|m?js|woff2)$/.test(target) &&
       roots.some((root) => {
         const path = relative(root, target);
+
         return path !== ".." && !path.startsWith("../") && !isAbsolute(path);
       })
     );

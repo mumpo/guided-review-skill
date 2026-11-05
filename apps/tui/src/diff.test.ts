@@ -7,11 +7,14 @@ const snapshot = () => structuredClone(fixture) as ReviewSnapshot;
 
 test("multi-file and split-file excerpts retain real line numbers and original order", () => {
   const review = snapshot();
+
   // Reversed and repeated references must not reorder or duplicate diff lines.
   review.sections[0].references.reverse();
   review.sections[0].references.push(...review.sections[0].references);
+
   const analysis = analyzeDiffs(review);
   const greeting = renderSectionDiff(analysis.sections[0]);
+
   expect(greeting).toContain("File: guide.md -> docs/guide.md (renamed)");
   expect(greeting).toContain("File: src/greeting.ts (modified)");
   expect(greeting).toContain("  1 |     | -hello\n    |   1 | +hello world");
@@ -20,7 +23,9 @@ test("multi-file and split-file excerpts retain real line numbers and original o
   expect(greeting).toContain("... unreferenced hunks omitted ...");
   expect(greeting).not.toContain("-Old guide");
   expect(greeting).not.toContain("-goodbye");
+
   const farewell = renderSectionDiff(analysis.sections[1]);
+
   expect(farewell).toContain(" 10 |     | -goodbye\n    |  10 | +see you");
   expect(farewell).not.toContain("+hello world");
 });
@@ -53,7 +58,9 @@ test("whole files preserve headers, context, no-newline markers, and non-text li
       })),
     },
   ];
+
   const output = renderSectionDiff(analyzeDiffs(review).sections[0]);
+
   expect(output).toContain("--- a/src/greeting.ts\n+++ b/src/greeting.ts");
   expect(output).toContain("  2 |   2 |  same");
   expect(output).toContain("    |     | \\ No newline at end of file");
@@ -95,7 +102,9 @@ test("partial hunks mark internal gaps and keep no-newline markers with selected
       endLine: 1,
     },
   ];
+
   const output = renderSectionDiff(analyzeDiffs(review).sections[0]);
+
   expect(output).toContain(
     "-first\n... unreferenced lines omitted ...\n  3 |     | -last",
   );
@@ -106,11 +115,13 @@ test("partial hunks mark internal gaps and keep no-newline markers with selected
 test("automatic mode classifies selected changes per file and obeys the width boundary", async () => {
   const { sectionDiffRows, effectiveDiffMode } = await import("./diff");
   const files = sectionDiffRows(analyzeDiffs(snapshot()).sections[0]);
+
   expect(effectiveDiffMode(files[0], "auto", 100)).toBe("side-by-side");
   expect(effectiveDiffMode(files[0], "auto", 99)).toBe("inline");
   expect(effectiveDiffMode(files[1], "auto", 150)).toBe("inline");
   expect(effectiveDiffMode(files[1], "side-by-side", 20)).toBe("side-by-side");
   expect(effectiveDiffMode(files[0], "inline", 150)).toBe("inline");
+
   const review = snapshot();
   review.sections[0].references = [
     {
@@ -121,6 +132,7 @@ test("automatic mode classifies selected changes per file and obeys the width bo
       endLine: 1,
     },
   ];
+
   expect(
     effectiveDiffMode(
       sectionDiffRows(analyzeDiffs(review).sections[0])[0],
@@ -139,9 +151,11 @@ test("side-by-side pairing preserves unequal blocks, context, no-newline markers
       "@@ -1,4 +1,3 @@\n-old one\n-old two\n+new one\n same\n-last old\n+last new\n\\ No newline at end of file\n",
   };
   review.sections[0].references = [{ kind: "file", fileId: "greeting" }];
+
   const file = sectionDiffRows(analyzeDiffs(review).sections[0])[0];
   const rows = layoutFileRows(file, "side-by-side");
   const pairs = rows.filter((row) => !row.full);
+
   expect(pairs.map((row) => [row.left?.text, row.right?.text])).toEqual([
     ["-old one", "+new one"],
     ["-old two", undefined],
@@ -193,8 +207,10 @@ test("omitted ranges and hunks prevent pairing and never reveal unselected lines
       endLine: 10,
     },
   ];
+
   const file = sectionDiffRows(analyzeDiffs(review).sections[0])[0];
   const rows = layoutFileRows(file, "side-by-side");
+
   expect(rows.filter((row) => row.left && row.right)).toHaveLength(0);
   expect(JSON.stringify(rows)).not.toContain("hidden");
   expect(rows.filter((row) => row.full?.role === "hunk")).toHaveLength(2);
