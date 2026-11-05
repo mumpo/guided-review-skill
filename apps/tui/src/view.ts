@@ -9,6 +9,7 @@ import type { LoadedReview } from "./load";
 import { type DiffMode, sectionDiffRows } from "./diff";
 import { DiffView } from "./diff-view";
 import { ExplanationView } from "./explanation-view";
+import { MarkdownView } from "./markdown-view";
 import { type Theme, themes } from "./theme";
 
 /** A summary followed by the artifact's sections, in their original order. */
@@ -43,12 +44,34 @@ export function mountReview(
     scrollY: true,
     contentOptions: { flexDirection: "column" },
   });
-  const narrative = new TextRenderable(renderer, {
+  const narrative = new BoxRenderable(renderer, {
     id: "narrative",
-    content: "",
-    wrapMode: "word",
+    width: "100%",
+    flexDirection: "column",
     flexShrink: 0,
   });
+  let narrativeText: TextRenderable[] = [];
+  let narrativeMarkdown: MarkdownView[] = [];
+  function plain(content: string) {
+    const node = new TextRenderable(renderer, {
+      content,
+      width: "100%",
+      wrapMode: "word",
+      flexShrink: 0,
+      fg: theme.markdown.text,
+      bg: theme.background,
+      marginBottom: 1,
+    });
+    narrative.add(node);
+    narrativeText.push(node);
+  }
+  function markdown(content: string) {
+    const node = new MarkdownView(renderer, theme);
+    node.marginBottom = 1;
+    node.setContent(content);
+    narrative.add(node);
+    narrativeMarkdown.push(node);
+  }
   body.add(narrative);
   const explanation = new ExplanationView(renderer, body, theme);
   body.add(explanation);
@@ -66,13 +89,18 @@ export function mountReview(
   root.add(help);
   renderer.root.add(root);
 
-  function applyTheme(theme: Theme) {
+  function applyTheme(nextTheme: Theme) {
+    theme = nextTheme;
     renderer.setBackgroundColor(theme.background);
     root.backgroundColor = theme.background;
     heading.fg = theme.navigation.foreground;
     heading.bg = theme.navigation.background;
-    narrative.fg = theme.markdown.text;
-    narrative.bg = theme.background;
+    narrative.backgroundColor = theme.background;
+    for (const node of narrativeText) {
+      node.fg = theme.markdown.text;
+      node.bg = theme.background;
+    }
+    for (const node of narrativeMarkdown) node.setTheme(theme);
     explanation.setTheme(theme);
     changes.setTheme(theme);
     help.fg = theme.muted;
@@ -98,6 +126,9 @@ export function mountReview(
   function showPage() {
     const section = snapshot.sections[page - 1];
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${page === 0 ? "Summary" : `Section ${page}/${snapshot.sections.length}: ${section.title}`}\n`;
+    for (const child of narrative.getChildren()) child.destroyRecursively();
+    narrativeText = [];
+    narrativeMarkdown = [];
     if (page === 0) {
       changes.setFiles([], diffMode);
       explanation.setContent("");
@@ -107,25 +138,29 @@ export function mountReview(
           (file) =>
             `${file.newPath ?? file.oldPath}: ${file.diff.kind === "unavailable" ? `unavailable (${file.diff.reason})` : "binary"}`,
         );
-      narrative.content = [
-        pr.title,
-        `${pr.url}\nAuthor: ${pr.author}\nBase: ${pr.baseCommit}\nHead: ${pr.headCommit}`,
-        `${snapshot.files.length} files · ${snapshot.sections.length} sections`,
-        ...(analysis.uncovered.length > 0
-          ? [
-              `Coverage: ${analysis.uncovered.length} file(s) have changes or markers outside the walkthrough.`,
-            ]
-          : []),
-        ...(limits.length > 0 ? [`Diff limits:\n${limits.join("\n")}`] : []),
-        `Summary\n${snapshot.summary || "(No summary)"}`,
-        `PR description\n${pr.description || "(No description)"}`,
-        `Sections\n${snapshot.sections.map((entry, index) => `${index + 1}. ${entry.title}`).join("\n") || "(No sections)"}`,
-      ].join("\n\n");
-    } else {
-      narrative.content = section.title;
-      explanation.setContent(
-        `\n\n${section.explanation || "(No explanation)"}`,
+      plain(
+        [
+          pr.title,
+          `${pr.url}\nAuthor: ${pr.author}\nBase: ${pr.baseCommit}\nHead: ${pr.headCommit}`,
+          `${snapshot.files.length} files · ${snapshot.sections.length} sections`,
+          ...(analysis.uncovered.length > 0
+            ? [
+                `Coverage: ${analysis.uncovered.length} file(s) have changes or markers outside the walkthrough.`,
+              ]
+            : []),
+          ...(limits.length > 0 ? [`Diff limits:\n${limits.join("\n")}`] : []),
+        ].join("\n\n"),
       );
+      plain("Summary");
+      markdown(snapshot.summary || "(No summary)");
+      plain("PR description");
+      markdown(pr.description || "(No description)");
+      plain(
+        `Sections\n${snapshot.sections.map((entry, index) => `${index + 1}. ${entry.title}`).join("\n") || "(No sections)"}`,
+      );
+    } else {
+      plain(section.title);
+      explanation.setContent(section.explanation || "(No explanation)");
       const files = sectionDiffRows(analysis.sections[page - 1]);
       changes.setFiles(
         files.length
