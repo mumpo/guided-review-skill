@@ -7,9 +7,14 @@ import {
 } from "@opentui/core";
 import type { LoadedReview } from "./load";
 import { renderSectionDiff } from "./diff";
+import { type Theme, themes } from "./theme";
 
 /** A summary followed by the artifact's sections, in their original order. */
-export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
+export function mountReview(
+  renderer: CliRenderer,
+  review: LoadedReview,
+  theme: Theme = themes["github-dark"],
+): (theme: Theme) => void {
   const { snapshot, analysis } = review;
   const pr = snapshot.pullRequest;
   let page = 0;
@@ -24,7 +29,6 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
   const heading = new TextRenderable(renderer, {
     id: "heading",
     content: "",
-    fg: "#79c0ff",
     wrapMode: "word",
     flexShrink: 0,
   });
@@ -43,6 +47,13 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
     flexShrink: 0,
   });
   body.add(narrative);
+  const diagram = new TextRenderable(renderer, {
+    id: "diagram",
+    content: "",
+    wrapMode: "word",
+    flexShrink: 0,
+  });
+  body.add(diagram);
   const changes = new TextRenderable(renderer, {
     id: "changes",
     content: "",
@@ -55,7 +66,6 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
     content:
       "n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | q/Ctrl+C: quit",
     wrapMode: "word",
-    fg: "#8b949e",
     flexShrink: 0,
   });
   root.add(heading);
@@ -63,11 +73,38 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
   root.add(help);
   renderer.root.add(root);
 
+  function applyTheme(theme: Theme) {
+    renderer.setBackgroundColor(theme.background);
+    root.backgroundColor = theme.background;
+    heading.fg = theme.navigation.foreground;
+    heading.bg = theme.navigation.background;
+    narrative.fg = theme.markdown.text;
+    narrative.bg = theme.background;
+    diagram.fg = theme.diagram.foreground;
+    diagram.bg = theme.diagram.background;
+    changes.fg = theme.diff.text;
+    changes.bg = theme.diff.background;
+    help.fg = theme.muted;
+    help.bg = theme.surface;
+    body.scrollbarOptions = {
+      trackOptions: {
+        foregroundColor: theme.scrollbar.foreground,
+        backgroundColor: theme.scrollbar.background,
+      },
+      arrowOptions: {
+        foregroundColor: theme.scrollbar.foreground,
+        backgroundColor: theme.scrollbar.background,
+      },
+    };
+  }
+  applyTheme(theme);
+
   function showPage() {
     const section = snapshot.sections[page - 1];
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${page === 0 ? "Summary" : `Section ${page}/${snapshot.sections.length}: ${section.title}`}\n`;
     if (page === 0) {
       changes.content = "";
+      diagram.content = "";
       const limits = snapshot.files
         .filter((file) => file.diff.kind !== "text")
         .map(
@@ -92,8 +129,10 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
       narrative.content = [
         section.title,
         section.explanation || "(No explanation)",
-        ...(section.diagram ? [`Diagram\n${section.diagram}`] : []),
       ].join("\n\n");
+      diagram.content = section.diagram
+        ? `\n\nDiagram\n${section.diagram}`
+        : "";
       changes.content = `\n\n${renderSectionDiff(analysis.sections[page - 1])}`;
     }
     body.scrollTo(0);
@@ -153,4 +192,5 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
   renderer.keyInput.on("keypress", onKey);
   renderer.once("destroy", () => renderer.keyInput.off("keypress", onKey));
   showPage();
+  return applyTheme;
 }

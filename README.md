@@ -69,6 +69,27 @@ Line references show only selected changes, with original hunk headers and expli
 
 Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
 
+### Terminal themes
+
+The viewer includes `github-light` and `github-dark`. By default, `auto` follows the terminal's reported light/dark appearance through OpenTUI. It waits up to 300 ms for initial detection, then uses GitHub Dark if no setting is available. Late replies and subsequent appearance changes update the colors without resetting your current section or scroll position. Detection reads the terminal's background color using OSC queries; supporting terminals can notify OpenTUI when their appearance changes. This follows the terminal appearance, which can differ from the operating system setting. Unsupported terminals or multiplexers that do not forward replies use the fallback; no OS-specific tools are required.
+
+Choose a fixed theme for a launch:
+
+```sh
+bun run dev:tui --theme github-light path/to/review.json
+bun run dev:tui path/to/review.json --theme=github-dark
+```
+
+For a persistent preference, set `GUIDED_REVIEW_THEME` in your shell or create `$XDG_CONFIG_HOME/guided-review/config.json` (default: `~/.config/guided-review/config.json`):
+
+```json
+{ "theme": "github-light" }
+```
+
+Precedence is `--theme` → `GUIDED_REVIEW_THEME` → config file → `auto`. All sources accept `auto`, `github-light`, or `github-dark`; an explicit `auto` restores automatic selection even when a lower-priority source names a fixed theme. Fixed themes ignore terminal appearance changes. A missing config file is normal and the viewer never creates one. Malformed/unreadable config files, unknown keys, and invalid theme values produce errors before terminal initialization, including when another source overrides them. An empty environment value is invalid; unset it to use the config file. `--help` works without loading configuration.
+
+Both palettes set text and background colors explicitly for the viewport, navigation, narrative, diagrams, diffs, help, and scrollbars. Detailed addition/deletion coloring and Markdown formatting remain planned separately.
+
 ## Collect a pull request
 
 Install Bun and the [GitHub CLI](https://cli.github.com/), and authenticate with `gh auth login` using an account that can access the PR. Run:
