@@ -54,6 +54,7 @@ function inline(tokens: Token[], inherited: Run = { text: "" }): Run[] {
           label.push({ ...inherited, role: "link", text: ` (${token.href})` });
         if (token.title)
           label.push({ ...inherited, role: "link", text: ` "${token.title}"` });
+
         return label;
       }
       case "br":
@@ -73,11 +74,14 @@ function inline(tokens: Token[], inherited: Run = { text: "" }): Run[] {
 
 function closedFence(token: Tokens.Code): boolean {
   if (token.codeBlockStyle === "indented") return true;
+
   const opening = /^ {0,3}(`{3,}|~{3,})[^\n]*\n/.exec(token.raw);
   if (!opening) return false;
+
   const closing = new RegExp(
     `\\n {0,3}${opening[1][0]}{${opening[1].length},}[ \\t]*(?:\\n)?$`,
   );
+
   return closing.test(token.raw);
 }
 
@@ -104,17 +108,22 @@ export class MarkdownView extends BoxRenderable {
 
   setContent(content: string, links: Links = {}) {
     for (const child of this.getChildren()) child.destroyRecursively();
+
     this.painted = [];
     if (!content) return;
+
     try {
       const lexer = new Lexer({ gfm: true });
+
       Object.assign(lexer.tokens.links, links);
       this.blocks(this, lexer.lex(content));
     } catch {
       for (const child of this.getChildren()) child.destroyRecursively();
+
       this.painted = [];
       this.text(this, [{ text: content }]);
     }
+
     this.setTheme(this.palette);
   }
 
@@ -131,8 +140,10 @@ export class MarkdownView extends BoxRenderable {
       wrapMode: code ? "char" : "word",
       content: "",
     });
+
     parent.add(node);
     this.painted.push({ node, runs, code, syntax });
+
     return node;
   }
 
@@ -169,6 +180,7 @@ export class MarkdownView extends BoxRenderable {
             this.text(parent, [{ text: list.raw }]);
             break;
           }
+
           list.items.forEach((item, index) => {
             const marker = list.ordered
               ? `${Number(list.start) + index}. `
@@ -179,19 +191,24 @@ export class MarkdownView extends BoxRenderable {
               flexShrink: 0,
               minWidth: 0,
             });
+
             parent.add(row);
+
             const prefix = new BoxRenderable(this.renderer, {
               width: marker.length,
               flexShrink: 0,
             });
+
             row.add(prefix);
             this.text(prefix, [{ text: marker }]);
+
             const body = new BoxRenderable(this.renderer, {
               flexGrow: 1,
               flexShrink: 1,
               minWidth: 1,
               flexDirection: "column",
             });
+
             row.add(body);
             this.blocks(body, item.tokens);
             if (list.loose) row.marginBottom = 1;
@@ -210,6 +227,7 @@ export class MarkdownView extends BoxRenderable {
               highlightSource(code.text, languageForFence(code.lang)),
             );
           }
+
           break;
         }
         default:
@@ -221,12 +239,14 @@ export class MarkdownView extends BoxRenderable {
   setTheme(theme: Theme) {
     this.palette = theme;
     this.backgroundColor = theme.background;
+
     for (const { node, runs, code, syntax } of this.painted) {
       const background = code
         ? theme.markdown.codeBackground
         : theme.background;
       node.fg = code ? theme.markdown.code : theme.markdown.text;
       node.bg = background;
+
       const colored = syntax?.[theme.name].flatMap((line, index) => [
         ...(index ? [{ text: "\n" }] : []),
         ...line,

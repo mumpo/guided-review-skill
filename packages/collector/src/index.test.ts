@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { collectPullRequest, type GhRunner } from "./index";
 
 const url = "https://github.com/example/project/pull/12";
+
 const metadata = {
   title: "A PR",
   body: null,
@@ -10,6 +11,7 @@ const metadata = {
   head: { sha: "head" },
   changed_files: 3,
 };
+
 const entries = [
   { filename: "new.txt", status: "added", additions: 1, deletions: 0 },
   {
@@ -21,6 +23,7 @@ const entries = [
   },
   { filename: "image.png", status: "modified", additions: 0, deletions: 0 },
 ];
+
 const diff =
   "diff --git a/new.txt b/new.txt\nnew file mode 100644\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+hello\n" +
   "diff --git a/old name.txt b/new name.txt\nsimilarity index 50%\nrename from old name.txt\nrename to new name.txt\n--- a/old name.txt\n+++ b/new name.txt\n@@ -1 +0,0 @@\n-goodbye\n" +
@@ -35,10 +38,12 @@ function runner(
   } = {},
 ): GhRunner {
   let metadataCalls = 0;
+
   return async (args) => {
     if (args.includes("-H")) return options.diff ?? diff;
     if (args[1].includes("/files?"))
       return JSON.stringify(options.files ?? entries);
+
     return JSON.stringify(
       metadataCalls++ === 0
         ? (options.first ?? metadata)
@@ -50,6 +55,7 @@ function runner(
 describe("collectPullRequest", () => {
   test("collects metadata, text, rename, and binary without losing text", async () => {
     const result = await collectPullRequest(url, runner());
+
     expect(result.pullRequest).toMatchObject({
       number: 12,
       description: "",
@@ -71,6 +77,7 @@ describe("collectPullRequest", () => {
     });
     expect(result.files[2].diff).toEqual({ kind: "binary" });
   });
+
   test("requests all pages of file data", async () => {
     const many = Array.from({ length: 101 }, (_, i) => ({
       filename: `f${i}`,
@@ -89,15 +96,19 @@ describe("collectPullRequest", () => {
       if (args.includes("-H")) return manyDiff;
       if (args[1].includes("/files?")) {
         calls.push(args[1]);
+
         return JSON.stringify(
           args[1].endsWith("page=1") ? many.slice(0, 100) : many.slice(100),
         );
       }
+
       return JSON.stringify({ ...metadata, changed_files: 101 });
     };
+
     expect((await collectPullRequest(url, run)).files).toHaveLength(101);
     expect(calls).toHaveLength(2);
   });
+
   test("reports access errors", async () => {
     await expect(
       collectPullRequest(url, async () => {
@@ -105,6 +116,7 @@ describe("collectPullRequest", () => {
       }),
     ).rejects.toThrow("authentication");
   });
+
   test("rejects incomplete data, diff, unsupported statuses, and changed commits", async () => {
     await expect(
       collectPullRequest(url, runner({ first: { ...metadata, title: null } })),
@@ -142,6 +154,7 @@ describe("collectPullRequest", () => {
       ),
     ).rejects.toThrow("changed during collection");
   });
+
   test("rejects mismatched file headers and changed line counts", async () => {
     await expect(
       collectPullRequest(
@@ -158,6 +171,7 @@ describe("collectPullRequest", () => {
       ),
     ).rejects.toThrow("changed line counts");
   });
+
   test("rejects non-PR and non-GitHub URLs", async () => {
     await expect(
       collectPullRequest(

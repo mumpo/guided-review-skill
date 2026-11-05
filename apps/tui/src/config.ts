@@ -10,6 +10,7 @@ export const usage =
 function parseTheme(value: unknown, source: string): ThemePreference {
   if (value === "auto" || value === "github-light" || value === "github-dark")
     return value;
+
   throw new Error(
     `${source}: expected auto, github-light, or github-dark; received ${JSON.stringify(value)}.`,
   );
@@ -18,6 +19,7 @@ function parseTheme(value: unknown, source: string): ThemePreference {
 function parseDiffMode(value: unknown, source: string): DiffMode {
   if (value === "auto" || value === "inline" || value === "side-by-side")
     return value;
+
   throw new Error(
     `${source}: expected auto, inline, or side-by-side; received ${JSON.stringify(value)}.`,
   );
@@ -33,10 +35,12 @@ export function parseArgs(args: string[]):
     } {
   if (args.length === 1 && (args[0] === "--help" || args[0] === "-h"))
     return { help: true };
+
   let path: string | undefined;
   let theme: ThemePreference | undefined;
   let diffMode: DiffMode | undefined;
   let positionalOnly = false;
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (!positionalOnly && arg === "--") {
@@ -45,6 +49,7 @@ export function parseArgs(args: string[]):
     }
     if (!positionalOnly && (arg === "--theme" || arg.startsWith("--theme="))) {
       if (theme !== undefined) throw new Error(`Duplicate --theme. ${usage}`);
+
       theme = parseTheme(
         arg === "--theme" ? args[++i] : arg.slice(8),
         "--theme",
@@ -55,6 +60,7 @@ export function parseArgs(args: string[]):
     ) {
       if (diffMode !== undefined)
         throw new Error(`Duplicate --diff-mode. ${usage}`);
+
       diffMode = parseDiffMode(
         arg === "--diff-mode" ? args[++i] : arg.slice(12),
         "--diff-mode",
@@ -64,7 +70,9 @@ export function parseArgs(args: string[]):
     } else if (path === undefined) path = arg;
     else throw new Error(usage);
   }
+
   if (!path) throw new Error(usage);
+
   return {
     help: false,
     path,
@@ -100,12 +108,15 @@ export async function loadPreferences(
         `Cannot read viewer configuration ${path}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+
     contents = "{}";
   }
+
   try {
     const value: unknown = JSON.parse(contents);
     if (value === null || typeof value !== "object" || Array.isArray(value))
       throw new Error("expected a JSON object");
+
     const config = value as Record<string, unknown>;
     const unknown = Object.keys(config).filter(
       (key) => key !== "theme" && key !== "diffMode",
@@ -121,10 +132,12 @@ export async function loadPreferences(
       `Invalid viewer configuration ${path}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
   const environment =
     env.GUIDED_REVIEW_THEME === undefined
       ? undefined
       : parseTheme(env.GUIDED_REVIEW_THEME, "GUIDED_REVIEW_THEME");
+
   return {
     theme: cli.theme ?? environment ?? configured ?? "auto",
     diffMode: cli.diffMode ?? diffMode ?? "auto",

@@ -21,6 +21,7 @@ export async function loadReview(path: string): Promise<LoadedReview> {
       `Cannot read artifact ${JSON.stringify(path)}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
   try {
     const snapshot = parseSnapshot(json);
     const analysis = analyzeDiffs(snapshot);
@@ -34,6 +35,7 @@ export async function loadReview(path: string): Promise<LoadedReview> {
           .join("\n"),
       );
     }
+
     return { snapshot, analysis };
   } catch (error) {
     throw new Error(

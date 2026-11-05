@@ -22,6 +22,7 @@ function file(path: string, raw: string[]): FileRows {
         : text.startsWith("-")
           ? "deletion"
           : "context";
+
       return {
         text,
         role: kind,
@@ -51,6 +52,7 @@ test("explicit path aliases include declaration files and leave unknown paths pl
     "x.zsh": "shellscript",
   }))
     expect(languageForPath(path)).toBe(language);
+
   for (const path of [
     null,
     undefined,
@@ -83,6 +85,7 @@ test("every bundled language highlights offline with exact source preservation i
     sql: "SELECT 'hello' FROM world;",
     md: "**hello** `world`",
   };
+
   for (const [ext, source] of Object.entries(examples)) {
     const input = file(`code.${ext}`, [
       `-${source}`,
@@ -91,14 +94,18 @@ test("every bundled language highlights offline with exact source preservation i
       " \t// Unicode café 😀 | + -  ",
     ]);
     const output = highlightFile(input);
+
     expect(output.size).toBe(4);
+
     for (const row of input.rows) {
       for (const theme of Object.values(themes)) {
         const side = row.role === "deletion" ? "old" : "new";
         const spans = output.get(row.line as DiffLine)?.[side]?.[theme.name];
+
         expect(spans?.map((span) => span.text).join("")).toBe(
           row.line?.raw.slice(1, -1),
         );
+
         if (row.role !== "context")
           expect(
             new Set(spans?.map((span) => span.color)).size,
@@ -124,12 +131,16 @@ test("old/new fragments use their own paths and never tokenize across omitted or
     role: "marker",
   });
   input.rows.splice(6, 0, { text: "@@ -10 +10 @@", role: "hunk" });
+
   const calls: string[] = [];
   const tokenizer: Tokenizer = (source, language, theme) => {
     if (theme === "github-light") calls.push(`${language}:${source}`);
+
     return source.split("\n").map((text) => [{ text, color: "#123456" }]);
   };
+
   highlightFile(input, tokenizer);
+
   expect(calls).toEqual([
     "python:old\nsame",
     "python:later",
@@ -149,18 +160,25 @@ test("multiline state is independent by side and resets for incomplete later hun
     "+const next = 2;",
     "+const final = 3;",
   ]);
+
   input.rows.splice(5, 0, { text: "@@ -20 +20 @@", role: "hunk" });
+
   const output = highlightFile(input);
+
   for (const theme of Object.values(themes)) {
     const context = output.get(input.rows[2].line as DiffLine);
+
     expect(context?.old?.[theme.name]).not.toEqual(context?.new?.[theme.name]);
+
     const later = output.get(input.rows[6].line as DiffLine)?.new?.[theme.name];
+
     expect(new Set(later?.map((span) => span.color)).size).toBeGreaterThan(1);
   }
 });
 
 test("failures, malformed tokens and unknown languages retain plain-text fallback", () => {
   const input = file("x.ts", ["+const value = 1;"]);
+
   for (const tokenizer of [
     () => {
       throw new Error("initialization or highlighting failed");
@@ -170,7 +188,9 @@ test("failures, malformed tokens and unknown languages retain plain-text fallbac
     () => [],
   ] satisfies Tokenizer[])
     expect(highlightFile(input, tokenizer).size).toBe(0);
+
   input.newPath = input.oldPath = "x.unknown";
+
   expect(
     highlightFile(input, () => {
       throw new Error("must not tokenize");
@@ -209,6 +229,7 @@ test("syntax colors remain readable on all diff backgrounds", () => {
 test("low-contrast syntax keeps its hue and GitHub's current keyword red stays red", () => {
   const light = themes["github-light"];
   const dark = themes["github-dark"];
+
   expect(
     readableTokenColor(
       "#cf222e",
@@ -216,6 +237,7 @@ test("low-contrast syntax keeps its hue and GitHub's current keyword red stays r
       light.diff.addition.background,
     ),
   ).toBe("#cf222e");
+
   const adjusted = readableTokenColor(
     "#d73a49",
     light.diff.addition.foreground,
@@ -225,19 +247,23 @@ test("low-contrast syntax keeps its hue and GitHub's current keyword red stays r
     [1, 3, 5].map((offset) =>
       Number.parseInt(color.slice(offset, offset + 2), 16),
     );
+
   const [r, g, b] = rgb(adjusted);
+
   expect(r).toBeGreaterThan(b);
   expect(b).toBeGreaterThan(g);
   expect(r).toBeLessThan(0xd7);
   expect(
     contrastRatio(adjusted, light.diff.addition.background),
   ).toBeGreaterThanOrEqual(4.5);
+
   const brightened = readableTokenColor(
     "#800000",
     dark.diff.addition.foreground,
     dark.diff.deletion.background,
   );
   const [dr, dg, db] = rgb(brightened);
+
   expect(dr).toBeGreaterThan(dg);
   expect(dg).toBe(db);
   expect(dr).toBeGreaterThan(0x80);
@@ -249,8 +275,10 @@ test("low-contrast syntax keeps its hue and GitHub's current keyword red stays r
 test("CRLF, no-newline markers and added/deleted paths preserve source without highlighting metadata", () => {
   const input = file("x.ts", ['+const text = "😀";  ', "+", "+// end"]);
   input.oldPath = null;
+
   for (const row of input.rows)
     if (row.line) row.line.raw = row.line.raw.replace(/\n$/, "\r\n");
+
   input.rows.splice(1, 0, {
     text: "\\ No newline at end of file",
     role: "marker",
@@ -261,7 +289,9 @@ test("CRLF, no-newline markers and added/deleted paths preserve source without h
       newLine: null,
     },
   });
+
   const output = highlightFile(input);
+
   expect(output.size).toBe(3);
   expect(output.has(input.rows[1].line as DiffLine)).toBe(false);
   expect(
@@ -270,7 +300,9 @@ test("CRLF, no-newline markers and added/deleted paths preserve source without h
       ?.new?.["github-light"].map((span) => span.text)
       .join(""),
   ).toBe('const text = "😀";  ');
+
   input.newPath = null;
   input.oldPath = "deleted.ts";
+
   expect(highlightFile(input).size).toBe(3);
 });

@@ -9,7 +9,9 @@ const fixture = new URL(
   "../../../packages/core/fixtures/valid.json",
   import.meta.url,
 ).pathname;
+
 const temp = await mkdtemp(join(tmpdir(), "guided-review-tui-"));
+
 afterAll(() => rm(temp, { recursive: true, force: true }));
 
 test("loads the generated real PR example offline", async () => {
@@ -19,6 +21,7 @@ test("loads the generated real PR example offline", async () => {
       import.meta.url,
     ).pathname,
   );
+
   expect(snapshot.pullRequest.number).toBe(1);
   expect(snapshot.sections).toHaveLength(2);
   expect(analysis.invalidReferences).toEqual([]);
@@ -29,8 +32,11 @@ test("reports missing files and malformed JSON with the input path", async () =>
   await expect(loadReview(join(temp, "missing.json"))).rejects.toThrow(
     /Cannot read artifact .*missing.json.*ENOENT/,
   );
+
   const path = join(temp, "malformed.json");
+
   await writeFile(path, "{");
+
   await expect(loadReview(path)).rejects.toThrow(
     /Invalid artifact .*malformed.json.*Invalid JSON/,
   );
@@ -63,11 +69,16 @@ test("rejects unsupported versions, invalid references, and malformed diffs", as
       /greeting/,
     ],
   ];
+
   for (const [name, mutate, message] of cases) {
     const snapshot = structuredClone(original);
+
     mutate(snapshot);
+
     const path = join(temp, `${name}.json`);
+
     await writeFile(path, JSON.stringify(snapshot));
+
     await expect(loadReview(path)).rejects.toThrow(message);
   }
 });
@@ -93,8 +104,10 @@ test("CLI reports usage, invalid files, and noninteractive startup failures", as
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),
     ]);
+
     return { code, stdout, stderr };
   }
+
   expect(await run(["--help"])).toMatchObject({ code: 0, stderr: "" });
   expect(await run(["--theme=invalid", fixture])).toMatchObject({
     code: 1,
@@ -102,12 +115,14 @@ test("CLI reports usage, invalid files, and noninteractive startup failures", as
       "--theme: expected auto, github-light, or github-dark",
     ),
   });
+
   for (const theme of ["auto", "github-light", "github-dark"]) {
     expect(await run(["--theme", theme, fixture])).toMatchObject({
       code: 1,
       stderr: expect.stringContaining("interactive terminal (TTY)"),
     });
   }
+
   expect(await run([])).toMatchObject({
     code: 1,
     stderr: expect.stringContaining("Usage:"),

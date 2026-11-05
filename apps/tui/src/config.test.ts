@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { configPath, loadThemePreference, parseArgs } from "./config";
 
 const temp = await mkdtemp(join(tmpdir(), "guided-review-theme-"));
+
 afterAll(() => rm(temp, { recursive: true, force: true }));
 
 test("CLI supports both theme forms, option order, help, and escaped paths", () => {
@@ -20,6 +21,7 @@ test("CLI supports both theme forms, option order, help, and escaped paths", () 
     path: "-review.json",
   });
   expect(parseArgs(["--help"])).toEqual({ help: true });
+
   for (const args of [
     [],
     ["a", "b"],
@@ -46,19 +48,28 @@ test("user configuration uses XDG or the home fallback", () => {
 
 test("theme precedence is CLI, environment, config, then auto", async () => {
   const missing = join(temp, "missing.json");
+
   expect(await loadThemePreference(undefined, {}, missing)).toBe("auto");
+
   const path = join(temp, "valid.json");
+
   await writeFile(path, '{"theme":"github-light"}');
+
   expect(await loadThemePreference(undefined, {}, path)).toBe("github-light");
+
   const env = { GUIDED_REVIEW_THEME: "github-dark" };
+
   expect(await loadThemePreference(undefined, env, path)).toBe("github-dark");
   expect(await loadThemePreference("auto", env, path)).toBe("auto");
+
   await writeFile(path, "{}");
+
   expect(await loadThemePreference(undefined, {}, path)).toBe("auto");
 });
 
 test("invalid configuration is actionable even when a higher priority source overrides it", async () => {
   const path = join(temp, "invalid.json");
+
   for (const content of [
     "{",
     "null",
@@ -68,13 +79,16 @@ test("invalid configuration is actionable even when a higher priority source ove
     '{"them":"auto"}',
   ]) {
     await writeFile(path, content);
+
     await expect(loadThemePreference("github-dark", {}, path)).rejects.toThrow(
       `Invalid viewer configuration ${path}`,
     );
   }
+
   await expect(loadThemePreference(undefined, {}, temp)).rejects.toThrow(
     "Cannot read viewer configuration",
   );
+
   for (const value of ["", "light"]) {
     await expect(
       loadThemePreference(
@@ -95,6 +109,7 @@ test("diff mode accepts both CLI forms and rejects missing, invalid, and duplica
   expect(
     parseArgs(["review.json", "--diff-mode=side-by-side", "--theme=auto"]),
   ).toMatchObject({ diffMode: "side-by-side", theme: "auto" });
+
   for (const args of [
     ["a", "--diff-mode"],
     ["a", "--diff-mode=split"],
@@ -107,11 +122,14 @@ test("diff mode accepts both CLI forms and rejects missing, invalid, and duplica
 test("shared configuration resolves diff mode independently and validates overridden values", async () => {
   const { loadPreferences } = await import("./config");
   const path = join(temp, "diff.json");
+
   expect(await loadPreferences({}, {}, join(temp, "missing.json"))).toEqual({
     theme: "auto",
     diffMode: "auto",
   });
+
   await writeFile(path, '{"theme":"github-light","diffMode":"side-by-side"}');
+
   expect(await loadPreferences({}, {}, path)).toEqual({
     theme: "github-light",
     diffMode: "side-by-side",
@@ -123,8 +141,10 @@ test("shared configuration resolves diff mode independently and validates overri
       path,
     ),
   ).toEqual({ theme: "github-dark", diffMode: "auto" });
+
   for (const value of [null, "split", false, 1]) {
     await writeFile(path, JSON.stringify({ diffMode: value }));
+
     await expect(
       loadPreferences({ diffMode: "inline" }, {}, path),
     ).rejects.toThrow("diffMode: expected auto, inline, or side-by-side");

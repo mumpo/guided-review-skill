@@ -70,6 +70,19 @@ which checks were actually run.
   staged diff before committing and include only intended changes. Do not commit
   local review snapshots unless the task explicitly needs a fixture.
 
+## Code style and readability
+
+- Use a single blank line between logical steps within a function, such as input
+  validation, setup, computation, side effects, and returning a result. Keep
+  closely related statements together; do not add a blank line after every
+  statement.
+- Separate top-level declarations and functions with a blank line. In tests,
+  use blank lines to distinguish setup, the action under test, and assertions
+  when those phases are present.
+- Apply this spacing when writing or editing code, even when nearby code is
+  densely packed. Keep unrelated formatting changes out of focused edits, and
+  preserve compatibility with Biome.
+
 ## Task and pull request workflow
 
 For planned implementation, take the first available unchecked task in `PLAN.md`,

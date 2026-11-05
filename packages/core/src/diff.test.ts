@@ -8,6 +8,7 @@ const textFile = (unified: string): DiffFile => ({
   status: "renamed",
   diff: { kind: "text", unified },
 });
+
 const fixture = await Bun.file(
   new URL("../fixtures/valid.json", import.meta.url),
 ).text();
@@ -17,8 +18,11 @@ describe("unified diff processing", () => {
     const input =
       "diff --git a/old.txt b/new.txt\r\nsimilarity index 80%\r\nrename from old.txt\r\nrename to new.txt\r\n--- a/old.txt\r\n+++ b/new.txt\r\n@@ -1,2 +1,2 @@ heading\r\n-old\r\n+new\r\n context\r\n@@ -5,0 +6 @@\r\n+last\r\n\\ No newline at end of file";
     const diff = parseDiff(textFile(input));
+
     expect(diff.kind).toBe("text");
+
     if (diff.kind !== "text") throw new Error("expected text");
+
     expect(
       [
         ...diff.header,
@@ -84,6 +88,7 @@ describe("reference resolution and coverage", () => {
   test("resolves split and multi-file sections and reports each uncovered side", () => {
     const snapshot = parseSnapshot(fixture);
     const result = analyzeDiffs(snapshot);
+
     expect(result.invalidReferences).toEqual([]);
     expect(result.sections.map((section) => section.length)).toEqual([3, 2, 2]);
     expect(result.uncovered).toHaveLength(1);
@@ -95,7 +100,9 @@ describe("reference resolution and coverage", () => {
         line.raw,
       ]),
     ).toEqual([["deletion", 1, "-Old guide\n"]]);
+
     snapshot.sections[0].references.push({ kind: "file", fileId: "guide" });
+
     expect(analyzeDiffs(snapshot).uncovered).toEqual([]);
   });
 
@@ -118,7 +125,9 @@ describe("reference resolution and coverage", () => {
       },
       { kind: "lines", fileId: "image", side: "new", startLine: 1, endLine: 1 },
     ];
+
     const result = analyzeDiffs(snapshot);
+
     expect(result.invalidReferences.map((item) => item.referenceIndex)).toEqual(
       [0, 1, 2],
     );
@@ -132,12 +141,14 @@ describe("reference resolution and coverage", () => {
 
   test("reports unreferenced binary, unavailable and metadata-only files", () => {
     const snapshot = parseSnapshot(fixture);
+
     snapshot.files.push(
       textFile(
         "diff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\n",
       ),
     );
     snapshot.sections = [];
+
     expect(
       analyzeDiffs(snapshot).uncovered.map(({ fileId, kind }) => [
         fileId,
@@ -172,6 +183,7 @@ describe("reference resolution and coverage", () => {
         ],
       },
     ];
+
     expect(
       analyzeDiffs(snapshot).sections[0][0].hunks[0].lines.map(
         (line) => line.kind,

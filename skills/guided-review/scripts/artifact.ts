@@ -10,11 +10,13 @@ import {
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error(`${label}: expected an object`);
+
   return value as Record<string, unknown>;
 }
 
 function collectionSnapshot(value: unknown): ReviewSnapshot {
   const collection = object(value, "collection");
+
   return validateSnapshot({
     version: 1,
     pullRequest: collection.pullRequest,
@@ -27,6 +29,7 @@ function collectionSnapshot(value: unknown): ReviewSnapshot {
 function checkNarrative(snapshot: ReviewSnapshot) {
   if (!snapshot.summary.trim())
     throw new Error("$.summary: expected non-empty Markdown");
+
   snapshot.sections.forEach((section, index) => {
     if (!section.explanation.trim())
       throw new Error(
@@ -70,13 +73,16 @@ export function verifyArtifact(
     throw new Error(
       "Artifact metadata or files differ from collection; rebuild from the original collection",
     );
+
   checkNarrative(snapshot);
+
   const analysis = analyzeDiffs(snapshot);
   checkReferences(analysis);
   if (analysis.uncovered.length)
     throw new Error(
       `Uncovered changes in ${analysis.uncovered.map((file) => file.fileId).join(", ")}; rebuild to include Ungrouped changes`,
     );
+
   return snapshot;
 }
 
@@ -129,12 +135,14 @@ function inspectionReport(
 export function buildArtifactWithReport(collection: unknown, value: unknown) {
   const original = collectionSnapshot(collection);
   const draft = object(value, "narrative");
+
   for (const key of Object.keys(draft)) {
     if (key !== "summary" && key !== "sections")
       throw new Error(
         `narrative.${key}: only summary and sections are allowed`,
       );
   }
+
   const snapshot = structuredClone(
     validateSnapshot({
       ...original,
@@ -143,17 +151,23 @@ export function buildArtifactWithReport(collection: unknown, value: unknown) {
       sections: draft.sections,
     }),
   );
+
   checkNarrative(snapshot);
+
   const analysis = analyzeDiffs(snapshot);
   checkReferences(analysis);
+
   const references: ChangeReference[] = [];
+
   for (const file of analysis.uncovered) {
     if (!file.lines.length) {
       references.push({ kind: "file", fileId: file.fileId });
       continue;
     }
+
     for (const side of ["old", "new"] as const) {
       let range: Extract<ChangeReference, { kind: "lines" }> | undefined;
+
       for (const line of file.lines) {
         const number = side === "old" ? line.oldLine : line.newLine;
         if (number === null) continue;
@@ -171,6 +185,7 @@ export function buildArtifactWithReport(collection: unknown, value: unknown) {
       }
     }
   }
+
   if (references.length) {
     let ungrouped = snapshot.sections.at(-1);
     const explanation =
@@ -181,9 +196,12 @@ export function buildArtifactWithReport(collection: unknown, value: unknown) {
     } else {
       ungrouped.explanation += `\n\n${explanation}`;
     }
+
     ungrouped.references.push(...references);
   }
+
   const verified = verifyArtifact(collection, snapshot);
+
   return { snapshot: verified, report: inspectionReport(verified, references) };
 }
 
@@ -202,6 +220,7 @@ if (import.meta.main) {
     const args = process.argv.slice(2);
     const report = args.at(-1) === "--report";
     if (report) args.pop();
+
     const [command, collectionPath, inputPath, outputPath, ...extra] = args;
     if (
       !collectionPath ||
@@ -213,6 +232,7 @@ if (import.meta.main) {
       throw new Error(
         "Usage: bun run artifact.ts build <collection.json> <narrative.json> <output.json> [--report] | validate <collection.json> <artifact.json> [--report]",
       );
+
     const collection = await readJson(collectionPath);
     const input = await readJson(inputPath);
     const built =
@@ -222,6 +242,7 @@ if (import.meta.main) {
     const snapshot = built?.snapshot ?? verifyArtifact(collection, input);
     if (command === "build") {
       const { writeFile } = await import("node:fs/promises");
+
       await writeFile(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`, {
         flag: "wx",
       });
