@@ -15,10 +15,16 @@ import {
   layoutFileRows,
 } from "./diff";
 import { type Theme, diffGutterBackground } from "./theme";
+import {
+  type HighlightedFile,
+  highlightFile,
+  readableTokenColor,
+} from "./highlight";
 
 /** Layout owns presentation only; all rows come from resolved captured changes. */
 export class DiffView extends BoxRenderable {
   private files: FileRows[] = [];
+  private syntax: HighlightedFile = new Map();
   private preference: DiffMode = "auto";
   private palette: Theme;
   private painted: { node: TextRenderable; cell: DiffCell }[] = [];
@@ -48,6 +54,7 @@ export class DiffView extends BoxRenderable {
   setFiles(files: FileRows[], preference: DiffMode) {
     this.anchorEpoch++;
     this.files = files;
+    this.syntax = new Map(files.flatMap((file) => [...highlightFile(file)]));
     this.preference = preference;
     this.rebuild();
   }
@@ -147,6 +154,8 @@ export class DiffView extends BoxRenderable {
               text: full.prefix ? text.slice(full.prefix.length) : text,
               prefix: full.prefix ?? "",
               role: full.role,
+              line: full.line,
+              side: full.role === "deletion" ? "old" : "new",
             }),
           );
           this.fills.push({ node, role: full.role });
@@ -216,6 +225,10 @@ export class DiffView extends BoxRenderable {
       const background = pair?.background ?? theme.diff.background;
       node.fg = foreground;
       node.bg = background;
+      const spans =
+        cell.line && cell.side
+          ? this.syntax.get(cell.line)?.[cell.side]?.[theme.name]
+          : undefined;
       node.content = new StyledText([
         {
           __isChunk: true,
@@ -228,7 +241,28 @@ export class DiffView extends BoxRenderable {
           ),
           fg: RGBA.fromHex(changed ? foreground : theme.diff.lineNumber),
         },
-        { __isChunk: true, text: cell.text, fg: RGBA.fromHex(foreground) },
+        ...(spans
+          ? [
+              {
+                __isChunk: true as const,
+                text: cell.text.slice(0, 1),
+                fg: RGBA.fromHex(foreground),
+              },
+              ...spans.map((span) => ({
+                __isChunk: true as const,
+                text: span.text,
+                fg: RGBA.fromHex(
+                  readableTokenColor(span.color, foreground, background),
+                ),
+              })),
+            ]
+          : [
+              {
+                __isChunk: true as const,
+                text: cell.text,
+                fg: RGBA.fromHex(foreground),
+              },
+            ]),
       ]);
     }
   }

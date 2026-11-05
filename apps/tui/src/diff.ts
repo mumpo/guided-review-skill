@@ -16,6 +16,8 @@ export interface DiffRow {
 }
 export interface FileRows {
   id: string;
+  oldPath?: string | null;
+  newPath?: string | null;
   rows: DiffRow[];
   width: number;
 }
@@ -95,7 +97,13 @@ export function sectionDiffRows(references: ResolvedReference[]): FileRows[] {
         if (omittedHunks) push("... unreferenced hunks omitted ...", "marker");
       }
     }
-    blocks.push({ id: file.id, rows, width });
+    blocks.push({
+      id: file.id,
+      oldPath: file.oldPath,
+      newPath: file.newPath,
+      rows,
+      width,
+    });
   }
   return blocks;
 }
@@ -114,6 +122,8 @@ export function renderSectionDiff(references: ResolvedReference[]): string {
 }
 
 export interface DiffCell {
+  line?: DiffLine;
+  side?: "old" | "new";
   marker?: string;
   text: string;
   prefix: string;
@@ -149,6 +159,8 @@ export function layoutFileRows(
     return file.rows.map((full, index) => ({ full, sources: [index] }));
   const result: PresentationRow[] = [];
   const cell = (row: DiffRow, side: "old" | "new"): DiffCell => ({
+    line: row.line,
+    side,
     prefix: `${String((side === "old" ? row.line?.oldLine : row.line?.newLine) ?? "").padStart(file.width)} | `,
     text: stripEnding(row.line?.raw ?? ""),
     role: row.role,

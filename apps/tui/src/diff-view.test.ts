@@ -6,6 +6,7 @@ import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import type { DiffMode } from "./diff";
 import { mountReview } from "./view";
 import { diffGutterBackground, themes } from "./theme";
+import { readableTokenColor } from "./highlight";
 
 function review(unified?: string) {
   const snapshot = structuredClone(fixture) as ReviewSnapshot;
@@ -55,7 +56,10 @@ test("both themes paint full inline rows and full split panes, including unequal
           expect(gutter?.text).not.toContain("|");
         }
         const contextLine = captured.lines.find((line) =>
-          line.spans.some((span) => span.text.includes("same | context")),
+          line.spans
+            .map((span) => span.text)
+            .join("")
+            .includes("same | context"),
         );
         expect(contextLine).toBeDefined();
         const contextGutter = contextLine?.spans.find(
@@ -76,7 +80,7 @@ test("both themes paint full inline rows and full split panes, including unequal
           ),
         ).toBe(true);
         const added = captured.lines[newRow].spans.find((span) =>
-          span.text.includes("+new"),
+          span.text.includes("+"),
         );
         expect(
           added?.fg.equals(RGBA.fromHex(theme.diff.addition.foreground)),
@@ -113,7 +117,6 @@ test("both themes paint full inline rows and full split panes, including unequal
         for (const [text, fg] of [
           ["diff --git", theme.diff.file],
           ["@@ -1", theme.diff.hunk],
-          ["same", theme.diff.context],
           ["No newline", theme.diff.marker],
         ]) {
           const span = captured.lines
@@ -286,6 +289,75 @@ test("markers, metadata, and empty sections retain readable themed messages in b
       await ui.mockInput.pressKeys(["n"]);
       await ui.renderOnce();
       expect(ui.captureCharFrame()).toContain("(No referenced changes)");
+    } finally {
+      await ui.dispose();
+    }
+  }
+});
+
+test("syntax foregrounds follow live themes and layouts without changing source or row backgrounds", async () => {
+  const data = review(
+    '@@ -1,2 +1,2 @@\n-const value = "old";\n+const value = "new";\n // retained context\n',
+  );
+  for (const mode of ["inline", "side-by-side"] as DiffMode[]) {
+    const ui = await createTestRenderer({ width: 120, height: 40 });
+    try {
+      const applyTheme = mountReview(
+        ui.renderer,
+        data,
+        themes["github-dark"],
+        mode,
+      );
+      await ui.mockInput.pressKeys(["n"]);
+      let previous = "";
+      for (const theme of [themes["github-dark"], themes["github-light"]]) {
+        applyTheme(theme);
+        await ui.renderOnce();
+        const frame = ui.captureCharFrame();
+        expect(frame).toContain('-const value = "old";');
+        expect(frame).toContain('+const value = "new";');
+        if (previous) expect(frame).toBe(previous);
+        previous = frame;
+        const keywordColor =
+          theme.name === "github-light" ? "#cf222e" : "#ff7b72";
+        const lines = ui.captureSpans().lines;
+        for (const [role, sign] of [
+          ["deletion", "-"],
+          ["addition", "+"],
+        ] as const) {
+          const spans = lines.flatMap((line) => line.spans);
+          const keyword = spans.find(
+            (span) =>
+              span.text.includes("const") &&
+              span.bg.equals(RGBA.fromHex(theme.diff[role].background)),
+          );
+          expect(keyword).toBeDefined();
+          expect(
+            keyword?.fg.equals(
+              RGBA.fromHex(
+                readableTokenColor(
+                  keywordColor,
+                  theme.diff[role].foreground,
+                  theme.diff[role].background,
+                ),
+              ),
+            ),
+          ).toBe(true);
+          const signSpan = spans.find(
+            (span) =>
+              span.text.startsWith(sign) &&
+              span.bg.equals(RGBA.fromHex(theme.diff[role].background)),
+          );
+          expect(
+            signSpan?.fg.equals(RGBA.fromHex(theme.diff[role].foreground)),
+          ).toBe(true);
+        }
+      }
+      await ui.mockInput.pressKeys(["d"]);
+      ui.resize(55, 40);
+      await ui.renderOnce();
+      expect(ui.captureCharFrame()).toContain('const value = "new');
+      expect(ui.captureCharFrame()).toContain("// retained contex");
     } finally {
       await ui.dispose();
     }
