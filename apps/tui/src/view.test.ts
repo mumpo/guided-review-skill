@@ -39,11 +39,7 @@ test("both themes paint explicit readable colors without changing displayed cont
       expect(spans()[0].bg.equals(RGBA.fromHex(theme.background))).toBe(true);
       await ui.mockInput.pressKeys(["n"]);
       await ui.renderOnce();
-      expectColor(
-        "greeting -> guide",
-        theme.diagram.foreground,
-        theme.diagram.background,
-      );
+      expect(ui.captureCharFrame()).not.toContain("greeting -> guide");
       expect(ui.captureCharFrame()).toContain("+hello world");
       const sign = spans().find((span) => span.text === "+");
       expect(
@@ -124,8 +120,8 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(ui.captureCharFrame()).toContain(
       "Changes the greeting and its guide.",
     );
-    expect(ui.captureCharFrame()).toContain("Diagram");
-    expect(ui.captureCharFrame()).toContain("greeting -> guide");
+    expect(ui.captureCharFrame()).not.toContain("Diagram");
+    expect(ui.captureCharFrame()).not.toContain("greeting -> guide");
     expect(ui.captureCharFrame()).toContain("File: src/greeting.ts (modified)");
     expect(ui.captureCharFrame()).toContain("  1         -hello");
     expect(ui.captureCharFrame()).toContain("        1   +hello world");

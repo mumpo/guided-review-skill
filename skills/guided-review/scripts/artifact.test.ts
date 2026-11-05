@@ -75,13 +75,15 @@ describe("artifact generation", () => {
     expect(result.files).toEqual(source.files);
   });
 
-  test("preserves source data, split-file/multi-file section ordering, and diagrams", () => {
-    const original = structuredClone(narrative);
-    const result = buildArtifact(collection, narrative);
+  test("preserves source data, split-file/multi-file section ordering, and explanation fences", () => {
+    const draft = structuredClone(narrative);
+    draft.sections[0].explanation += "\n\n```mermaid\nflowchart LR\nA-->B\n```";
+    const original = structuredClone(draft);
+    const result = buildArtifact(collection, draft);
     expect(result.pullRequest).toEqual(collection.pullRequest);
     expect(result.files).toEqual(collection.files);
-    expect(result.sections.slice(0, 3)).toEqual(narrative.sections);
-    expect(narrative).toEqual(original);
+    expect(result.sections.slice(0, 3)).toEqual(draft.sections);
+    expect(draft).toEqual(original);
     expect(result.sections.at(-1)).toMatchObject({
       title: "Ungrouped changes",
       references: [

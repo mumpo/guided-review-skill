@@ -31,7 +31,6 @@ export interface DiffFile {
 export interface ReviewSection {
   title: string;
   explanation: string;
-  diagram?: string;
   references: ChangeReference[];
 }
 
@@ -167,8 +166,6 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
     const section = object(entry, path);
     string(section.title, `${path}.title`, true);
     string(section.explanation, `${path}.explanation`);
-    if (section.diagram !== undefined)
-      string(section.diagram, `${path}.diagram`);
     array(section.references, `${path}.references`).forEach(
       (entry, referenceIndex) => {
         const refPath = `${path}.references[${referenceIndex}]`;

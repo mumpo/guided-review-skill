@@ -8,6 +8,7 @@ import {
 import type { LoadedReview } from "./load";
 import { type DiffMode, sectionDiffRows } from "./diff";
 import { DiffView } from "./diff-view";
+import { ExplanationView } from "./explanation-view";
 import { type Theme, themes } from "./theme";
 
 /** A summary followed by the artifact's sections, in their original order. */
@@ -49,13 +50,8 @@ export function mountReview(
     flexShrink: 0,
   });
   body.add(narrative);
-  const diagram = new TextRenderable(renderer, {
-    id: "diagram",
-    content: "",
-    wrapMode: "word",
-    flexShrink: 0,
-  });
-  body.add(diagram);
+  const explanation = new ExplanationView(renderer, body, theme);
+  body.add(explanation);
   const changes = new DiffView(renderer, body, theme);
   body.add(changes);
   const help = new TextRenderable(renderer, {
@@ -77,8 +73,7 @@ export function mountReview(
     heading.bg = theme.navigation.background;
     narrative.fg = theme.markdown.text;
     narrative.bg = theme.background;
-    diagram.fg = theme.diagram.foreground;
-    diagram.bg = theme.diagram.background;
+    explanation.setTheme(theme);
     changes.setTheme(theme);
     help.fg = theme.muted;
     help.bg = theme.surface;
@@ -105,7 +100,7 @@ export function mountReview(
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${page === 0 ? "Summary" : `Section ${page}/${snapshot.sections.length}: ${section.title}`}\n`;
     if (page === 0) {
       changes.setFiles([], diffMode);
-      diagram.content = "";
+      explanation.setContent("");
       const limits = snapshot.files
         .filter((file) => file.diff.kind !== "text")
         .map(
@@ -127,13 +122,10 @@ export function mountReview(
         `Sections\n${snapshot.sections.map((entry, index) => `${index + 1}. ${entry.title}`).join("\n") || "(No sections)"}`,
       ].join("\n\n");
     } else {
-      narrative.content = [
-        section.title,
-        section.explanation || "(No explanation)",
-      ].join("\n\n");
-      diagram.content = section.diagram
-        ? `\n\nDiagram\n${section.diagram}`
-        : "";
+      narrative.content = section.title;
+      explanation.setContent(
+        `\n\n${section.explanation || "(No explanation)"}`,
+      );
       const files = sectionDiffRows(analysis.sections[page - 1]);
       changes.setFiles(
         files.length
@@ -210,11 +202,17 @@ export function mountReview(
   }
 
   renderer.keyInput.on("keypress", onKey);
-  const onResize = () => changes.resizeLayout();
+  const onResize = () => {
+    changes.resizeLayout();
+    explanation.resizeLayout();
+  };
+  const onCapabilities = () => explanation.resizeLayout();
+  renderer.on("capabilities", onCapabilities);
   renderer.on("resize", onResize);
   renderer.once("destroy", () => {
     renderer.keyInput.off("keypress", onKey);
     renderer.off("resize", onResize);
+    renderer.off("capabilities", onCapabilities);
   });
   showPage();
   return applyTheme;
