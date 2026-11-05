@@ -2,7 +2,7 @@
 
 Guided Review will help people review GitHub pull requests through an ordered, agent-generated walkthrough of the actual changes. A shared review artifact will support a terminal viewer and a GitHub-inspired web viewer without requiring a checkout of the PR repository.
 
-The shared artifact contract, GitHub collection helper, generation skill for Codex and Claude Code, and terminal viewer foundation are implemented. Detailed terminal diffs and the web viewer are still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
+The shared artifact contract, GitHub collection helper, generation skill for Codex and Claude Code, and terminal diff viewer are implemented. The web viewer is still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
 
 ## Generate a guided review
 
@@ -54,7 +54,9 @@ bun run dev:tui path/to/review.json
 
 Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cli-pr-1.json`. Paths are relative to your current directory; absolute paths also work. Viewing works offline, without `gh`, authentication, or a PR checkout.
 
-The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its title and explanation. Markdown is displayed as plain source text. Detailed diffs and diagrams will be added in task 6.
+The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation, optional text diagram, and referenced real diff with file paths, change status, and old/new line numbers. Markdown and diagrams are displayed as plain source text.
+
+Line references show only selected changes, with original hunk headers and explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Renames show both paths, while binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
 
 | Keys | Action |
 | --- | --- |
@@ -102,7 +104,7 @@ Coverage counts each addition and deletion independently, even when they replace
 
 - `packages/core`: shared, runtime-independent review model and diff logic.
 - `packages/collector`: local GitHub CLI collection helper.
-- `apps/tui`: OpenTUI terminal viewer with local validation, summary, and section navigation.
+- `apps/tui`: OpenTUI terminal viewer with local validation, summary, section navigation, and referenced unified diffs.
 - `apps/web`: browser viewer, planned with React and shadcn/ui.
 - `skills/guided-review`: shared Codex and Claude Code generation skill, offline build/validation helper, and a real-PR example.
 

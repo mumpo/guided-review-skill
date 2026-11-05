@@ -49,34 +49,63 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 
 ### 6. TUI diff review
 
-- [ ] Render each section's referenced real unified diff with file names, line numbers, explanations, and optional diagrams. Support scrolling and narrow terminals.
+- [x] Render each section's referenced real unified diff with file names, line numbers, explanations, and optional diagrams. Support scrolling and narrow terminals.
 - **Depends on:** task 5.
 - **Boundary:** Read-only; no review comments or submission.
 - **Acceptance:** Verify multi-file and split-file sections, ungrouped changes, scrolling, resizing, and offline use with fixtures.
 
-### 7. Web foundation
+### 7. TUI theming
+
+- [ ] Make the UI configurable through provided themes, starting with GitHub Light and GitHub Dark. Default to the theme matching the system light/dark setting, with an explicit user override. Define reusable theme colors for text, backgrounds, navigation, diffs, diagrams, and Markdown.
+- **Depends on:** task 6.
+- **Boundary:** Establish theme configuration and readable UI colors; detailed diff styling belongs to task 8. Keep terminal/system detection outside the runtime-independent core.
+- **Acceptance:** Verify readable foreground/background combinations in light and dark terminals, automatic selection matching the system setting, explicit theme selection, and useful errors for invalid configuration. Document detection behavior and a predictable fallback when the setting cannot be detected. Include theme-selection and rendered UI checks.
+
+### 8. Themed diff rendering
+
+- [ ] Apply theme colors to additions, deletions, context, hunk headers, file headers, line numbers, omission markers, and non-text diff messages.
+- **Depends on:** tasks 6–7.
+- **Boundary:** Preserve the real diff text, reference selection, line numbers, and coverage semantics. Keep additions/deletions distinguishable by their existing signs as well as color.
+- **Acceptance:** Verify representative multi-file, split-file, and ungrouped diffs in GitHub Light and GitHub Dark, including wrapped lines, scrolling, resizing, and binary/unavailable markers. Confirm styling does not change displayed content or selected changes.
+
+### 9. Mermaid diagram rendering
+
+- [ ] Adopt Mermaid for generated diagrams and investigate rendering them in the terminal using the Kitty graphics protocol. Record feasibility, required local dependencies, terminal capability detection, and behavior during scrolling and resizing. Implement the supported rendering path with a readable source fallback.
+- **Depends on:** tasks 4 and 7.
+- **Boundary:** Keep artifacts self-contained and viewing offline. Preserve existing plain-text diagrams; update generation guidance and document how Mermaid is distinguished from legacy text. Treat diagram source as untrusted content. Kitty graphics support is an investigation outcome, not a requirement to exclude terminals that lack it.
+- **Acceptance:** Use representative Mermaid fixtures to verify light/dark styling, offline rendering, and clear handling of malformed diagrams or missing rendering dependencies. Demonstrate graphics rendering, scrolling, resizing, and cleanup in a compatible terminal if feasible; otherwise record the blocker and chosen fallback. Verify readable fallback in unsupported terminals and compatibility with existing text diagrams.
+
+### 10. Markdown formatting in the TUI
+
+- [ ] Add basic themed Markdown formatting for the summary, PR description, and section explanations: headings, paragraphs, lists, emphasis, inline code, fenced code blocks, and links. Keep diagram rendering separate from narrative formatting.
+- **Depends on:** task 7.
+- **Boundary:** Read-only presentation; do not execute embedded code or HTML. Preserve readable text for unsupported Markdown constructs and keep link destinations visible without automatically opening them.
+- **Acceptance:** Verify representative Markdown fixtures in both default themes, including nested lists, code blocks, long links, narrow terminals, scrolling, and resizing. Ensure formatted narrative remains readable alongside section diffs and diagrams, with no lost content or navigation regressions.
+
+### 11. Web foundation
 
 - [ ] Set up React, Vite, Tailwind CSS, and shadcn/ui. Add a CLI that accepts a local artifact path, binds a server to localhost, serves only the viewer and selected artifact, and opens the browser.
 - **Depends on:** tasks 1–2.
 - **Boundary:** No remote hosting, GitHub authentication, or review submission.
 - **Acceptance:** The command opens a valid fixture offline; invalid files produce actionable errors; server and browser-launch failures are reported clearly.
 
-### 8. Web review experience
+### 12. Web review experience
 
 - [ ] Build the GitHub-inspired PR header and summary, ordered section navigation, explanations, optional diagrams, and unified diffs with file names and line numbers. Use the shared core for validation and diff resolution.
-- **Depends on:** task 7.
+- **Depends on:** task 11.
 - **Boundary:** Read-only; no GitHub comments or submission.
 - **Acceptance:** Verify navigation, real diff content, split-file and multi-file sections, keyboard accessibility, and responsive layouts using representative fixtures.
 
-### 9. End-to-end hardening
+### 13. End-to-end hardening
 
 - [ ] Exercise generation and both viewers together, resolve integration gaps, and finish installation, usage, troubleshooting, and artifact documentation.
-- **Depends on:** tasks 4, 6, and 8.
+- **Depends on:** tasks 4, 6–10, and 12.
 - **Boundary:** Do not add deferred commenting, review submission, or additional viewers.
 - **Acceptance:** Generate a snapshot for an accessible real PR; compare metadata, commit IDs, and full diff coverage with GitHub; open it offline in both viewers; run the full workspace checks.
 
 ## Decisions and progress
 
+- Planning update: Before starting the web foundation, complete TUI theming, themed diffs, Mermaid diagram rendering with a Kitty graphics feasibility investigation, and basic Markdown formatting. GitHub Light and GitHub Dark are the initial provided themes, selected automatically from the system setting unless overridden. Existing artifact content and offline viewing remain supported. Former tasks 7–9 are now tasks 11–13; task 7 is the next implementation task.
 - Initial scaffold: Bun workspace, TypeScript, Biome, a self-contained JSON snapshot, and separate generation and viewing steps. The web viewer is launched with a local artifact path.
 - Task 1: Version 1 stores per-file unified diff text or an explicit binary/unavailable marker. Sections can reference whole files or inclusive, one-based old/new line ranges; structural validation checks file IDs and ranges, while diff resolution and coverage remain task 2. Unknown fields are preserved. Tests, lint, formatting, and typecheck pass.
 - Task 2: Diff parsing preserves raw lines and rejects unsupported or incomplete content. Coverage tracks additions and deletions separately; line references select changed lines on their stated side, while whole-file references cover all available content or an explicit non-text marker. Unreferenced metadata-only files are also reported.
@@ -84,3 +113,4 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - Task 4: The Claude Code skill writes only narrative and references; its offline helper combines these with untouched collected metadata and files. Invalid references fail, and exact uncovered old/new ranges or non-text/metadata markers go into a final `Ungrouped changes` section. Finished artifacts are checked against the original collection for preservation and complete captured-change coverage; narrative quality and priority remain inspection responsibilities. Installation uses a symlink into a full clone. A fresh collection of `cli/cli#1` produced the committed example with two manually inspected, priority-ordered sections and full textual coverage. All 27 tests, workspace checks, and skill-format validation pass. Claude Code itself was not invoked during verification.
 - Task 4 extension requested by the user: Codex and Claude Code share the canonical `skills/guided-review` directory through relative repository discovery links in `.agents/skills` and `.claude/skills`. Instructions read invocation input from the request and resolve their own directory without host-specific substitutions. README documents both invocation forms and optional personal links. Verified reference/collector resolution and offline artifact build/validation through both links from an unrelated working directory; all 27 tests, workspace checks, and skill-format validation pass. No new agent session was launched to test skill discovery.
 - Task 5: Pinned OpenTUI core 0.8.2 and added a local artifact CLI that validates structure, diffs, and references before initializing the terminal. The summary includes PR metadata, captured commits, ordered section titles, coverage gaps, and non-text diff limits. Keyboard navigation preserves artifact order, with scrolling for long narrative and clean quit/terminal restoration. Narrative is displayed as plain Markdown source; detailed diffs and diagrams remain task 6. The root launcher invokes the CLI directly because Bun's workspace filter changes working directory and pipes terminal output. Seven new tests cover offline loading, actionable failures, public launcher path handling, rendered keyboard interactions, scrolling, resizing, empty sections, and shutdown. All 34 tests, lint, formatting, and typecheck pass. Manually opened the real `cli/cli#1` fixture from the root command in a PTY, navigated to a section, and quit successfully without GitHub access.
+- Task 6: Sections now show their explanation, optional plain-text diagram, and real diff excerpts from the shared core's resolved references. References to the same file are merged without duplicate lines and rendered in original hunk/line order; file order follows first reference. Old/new line numbers, rename paths, original diff headers, no-newline markers, and explicit binary/unavailable/metadata-only messages retain captured details. Partial references show original hunk headers with labeled omission markers, so excluded context or other sections' changes are not presented as adjacent lines. Code wraps by character in narrow terminals and uses the existing vertical scrolling controls. Four new tests plus expanded interaction assertions verify multi-file/split-file sections, overlapping references, ungrouped changes, markers, long code, scrolling, resizing, and section reset. All 38 tests, lint, formatting, and typecheck pass. Manually opened the committed real PR fixture in a PTY, navigated both sections, scrolled its numbered diff, and quit without GitHub access. No generation, web, or review-submission changes.

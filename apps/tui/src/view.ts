@@ -6,6 +6,7 @@ import {
   TextRenderable,
 } from "@opentui/core";
 import type { LoadedReview } from "./load";
+import { renderSectionDiff } from "./diff";
 
 /** A summary followed by the artifact's sections, in their original order. */
 export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
@@ -42,6 +43,13 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
     flexShrink: 0,
   });
   body.add(narrative);
+  const changes = new TextRenderable(renderer, {
+    id: "changes",
+    content: "",
+    wrapMode: "char",
+    flexShrink: 0,
+  });
+  body.add(changes);
   const help = new TextRenderable(renderer, {
     id: "help",
     content:
@@ -59,6 +67,7 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
     const section = snapshot.sections[page - 1];
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${page === 0 ? "Summary" : `Section ${page}/${snapshot.sections.length}: ${section.title}`}\n`;
     if (page === 0) {
+      changes.content = "";
       const limits = snapshot.files
         .filter((file) => file.diff.kind !== "text")
         .map(
@@ -83,8 +92,9 @@ export function mountReview(renderer: CliRenderer, review: LoadedReview): void {
       narrative.content = [
         section.title,
         section.explanation || "(No explanation)",
-        `${section.references.length} change reference(s).`,
+        ...(section.diagram ? [`Diagram\n${section.diagram}`] : []),
       ].join("\n\n");
+      changes.content = `\n\n${renderSectionDiff(analysis.sections[page - 1])}`;
     }
     body.scrollTo(0);
   }
