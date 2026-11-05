@@ -117,6 +117,14 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - **Boundary:** Do not add deferred commenting, review submission, or additional viewers.
 - **Acceptance:** Generate a snapshot for an accessible real PR; compare metadata, commit IDs, and full diff coverage with GitHub; open it offline in both viewers; run the full workspace checks.
 
+## Additional todos
+
+- [ ] Speed up review artifact creation: explore a lighter structure than JSON, change how code is referenced, and enforce fast models.
+- [ ] Add a commenting feature.
+- [ ] Review Vim motions.
+- [ ] Redesign the main TUI layout and sections.
+- [ ] Launch the TUI automatically from the skill.
+
 ## Decisions and progress
 
 - Planning update: Before starting the web foundation, complete TUI theming, themed diffs, Mermaid diagram rendering with a Kitty graphics feasibility investigation, and basic Markdown formatting. GitHub Light and GitHub Dark are the initial provided themes, selected automatically from the system setting unless overridden. Existing artifact content and offline viewing remain supported. Former tasks 7–9 are now tasks 11–13; task 7 is the next implementation task.
@@ -141,3 +149,5 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - Task 9 color follow-up: Use Shiki's current GitHub default palettes (including light keyword red `#cf222e`) under the existing theme names. Low-contrast syntax foregrounds are adjusted toward black or white to reach 4.5:1 against the actual diff background while preserving their hue; they no longer inherit the addition/deletion foreground. Missing token colors still use the normal text foreground. Regression checks verify red keywords remain red in both layouts, adjustment in both brightness directions, and unchanged colors that already meet the threshold. All 68 local tests, lint, formatting, typecheck, and diff checks pass. GitHub Actions follow-up remains deferred at the user's request.
 
 - Task 10: Both layouts now emphasize changed source graphemes within the existing positional old/new pairs. Shared pairing preserves selected contiguous block boundaries, source identities, no-newline markers, and viewport anchors. Unicode-aware LCS comparison uses deletion-first ties and a 250,000-cell budget after common prefix/suffix trimming; larger comparisons emphasize the remaining differing region. Ranges are cached per selected section and intersected with syntax tokens, using stronger semantic backgrounds and foreground contrast adjustment against the actual span background. Unpaired lines keep whole-line styling. README documents behavior and fallback. All 76 tests, lint, formatting, typecheck, and diff checks pass, covering exact ranges, whitespace, repeated text, Unicode, unequal blocks, selection gaps, bounded comparison, syntax/plain text colors, wrapping, scrolling, resizing, and live layout/theme changes. Offline PTY smoke checks passed for the real PR fixture and a temporary TypeScript/emoji replacement fixture in both themes, including layout cycling and terminal restoration. No physical-terminal visual inspection was performed. No artifact, core, generation, or configuration changes. Task 11 is next.
+
+- Task 10 word-level follow-up requested by the user: Changed comparison segmentation from Unicode graphemes to Unicode words to avoid fragmented emphasis within identifiers. CamelCase and snake_case identifiers remain whole; punctuation and whitespace segments still participate without rewriting source. The existing LCS, deterministic ties, selected-pair boundaries, and fallback remain, with the budget now measured in segment-pair cells. Updated exact-range and fallback fixtures and added rendered whole-identifier regression checks in both themes/layouts. All 77 tests, lint, formatting, typecheck, and diff checks pass. README documents the new behavior.

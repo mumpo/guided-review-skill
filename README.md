@@ -85,9 +85,9 @@ Inline mode displays the unified diff with old/new line numbers. Side-by-side mo
 
 ### Changed spans
 
-Paired old/new lines emphasize their changed characters with stronger green/red backgrounds in both layouts, alongside syntax colors. Comparison follows the same positional pairs as side-by-side layout and uses only selected changes within each contiguous block. Context, omissions, and hunk boundaries stop comparison; unmatched lines keep whole-line styling. Signs, line numbers, and padding retain their existing colors.
+Paired old/new lines emphasize their changed words with stronger green/red backgrounds in both layouts, alongside syntax colors. Comparison follows the same positional pairs as side-by-side layout and uses only selected changes within each contiguous block. Context, omissions, and hunk boundaries stop comparison; unmatched lines keep whole-line styling. Signs, line numbers, and padding retain their existing colors.
 
-Comparison treats Unicode graphemes (including combining characters and emoji sequences) as units and preserves whitespace exactly, without adding visible markers. Insertions or deletions within a pair emphasize only the side containing changed characters. For expensive comparisons exceeding 250,000 grapheme-pair cells after shared prefix/suffix trimming, the remaining differing region receives emphasis as a whole. Viewing remains offline, and layout/theme changes reuse the computed ranges.
+Comparison uses Unicode word boundaries, emphasizing a whole changed word even when only one character differs. CamelCase and snake_case identifiers stay whole; punctuation and whitespace segments participate in comparison without changing the source or adding visible markers. Combining characters and emoji sequences remain intact. Inserted or deleted words emphasize only the side containing them; changed whitespace runs are emphasized on both sides. For expensive comparisons exceeding 250,000 segment-pair cells after shared prefix/suffix trimming, the remaining differing region receives emphasis as a whole. Viewing remains offline, and layout/theme changes reuse the computed ranges.
 
 ### Syntax highlighting
 

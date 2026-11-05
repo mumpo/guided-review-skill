@@ -8,7 +8,8 @@ export interface ChangedRange {
   end: number;
 }
 export type ChangedSpans = Map<DiffLine, ChangedRange[]>;
-const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+// Compare whole Unicode words, retaining punctuation and whitespace segments verbatim.
+const segmenter = new Intl.Segmenter("en", { granularity: "word" });
 const comparisonBudget = 250_000;
 
 export function compareLineSpans(oldText: string, newText: string) {

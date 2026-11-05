@@ -10,24 +10,29 @@ import {
 
 const range = (start: number, end: number) => ({ start, end });
 
-test("precise ranges preserve insertions, deletions, replacements, and whitespace", () => {
+test("whole-word ranges preserve insertions, deletions, replacements, and whitespace", () => {
   for (const [oldText, newText, old, next] of [
     ["hello", "hello world", [], [range(5, 11)]],
     ["hello world", "hello", [range(5, 11)], []],
     [
       "abc def ghi",
       "axc def gzi",
-      [range(1, 2), range(9, 10)],
-      [range(1, 2), range(9, 10)],
+      [range(0, 3), range(8, 11)],
+      [range(0, 3), range(8, 11)],
     ],
-    ["a b", "a  b", [], [range(2, 3)]],
+    ["a b", "a  b", [range(1, 2)], [range(1, 3)]],
     ["a\tb", "a b", [range(1, 2)], [range(1, 2)]],
-    ["a  ", "a ", [range(2, 3)], []],
+    ["a  ", "a ", [range(1, 3)], [range(1, 2)]],
     ["", "", [], []],
     ["same", "same", [], []],
     ["", "added", [], [range(0, 5)]],
     ["deleted", "", [range(0, 7)], []],
-    ["aba", "bab", [range(0, 1)], [range(2, 3)]],
+    ["aba", "bab", [range(0, 3)], [range(0, 3)]],
+    ["red blue", "blue red", [range(0, 4)], [range(4, 8)]],
+    ["getUser", "getUsers", [range(0, 7)], [range(0, 8)]],
+    ["user_name", "user_id", [range(0, 9)], [range(0, 7)]],
+    ["call(foo)", "call(bar)", [range(5, 8)], [range(5, 8)]],
+    ["x + y", "x - y", [range(2, 3)], [range(2, 3)]],
   ] as const) {
     expect(compareLineSpans(oldText, newText)).toEqual({
       old: [...old],
@@ -36,14 +41,14 @@ test("precise ranges preserve insertions, deletions, replacements, and whitespac
   }
 });
 
-test("Unicode graphemes stay intact and offsets refer to unchanged UTF-16 source", () => {
+test("Unicode words and emoji stay intact with original UTF-16 offsets", () => {
   expect(compareLineSpans("a👩‍💻e\u0301z", "a👨‍💻éz")).toEqual({
-    old: [range(1, 8)],
-    new: [range(1, 7)],
+    old: [range(1, 9)],
+    new: [range(1, 8)],
   });
   expect(compareLineSpans("🙂same", "🙂sXame")).toEqual({
-    old: [],
-    new: [range(3, 4)],
+    old: [range(2, 6)],
+    new: [range(2, 7)],
   });
   expect(compareLineSpans("🇪🇸", "🇫🇷")).toEqual({
     old: [range(0, 4)],
@@ -52,16 +57,16 @@ test("Unicode graphemes stay intact and offsets refer to unchanged UTF-16 source
 });
 
 test("expensive comparisons use a bounded differing region after prefix/suffix trimming", () => {
-  const old = `prefix ${"a".repeat(501)}X suffix`;
-  const next = `prefix ${"b".repeat(501)}Y suffix`;
+  const old = `prefix ${"old ".repeat(251)}OLD suffix`;
+  const next = `prefix ${"new ".repeat(251)}NEW suffix`;
   expect(compareLineSpans(old, next)).toEqual({
-    old: [range(7, 509)],
-    new: [range(7, 509)],
+    old: [range(7, 1014)],
+    new: [range(7, 1014)],
   });
   const huge = "x".repeat(100_000);
   expect(compareLineSpans(huge, `${huge}y`)).toEqual({
-    old: [],
-    new: [range(100_000, 100_001)],
+    old: [range(0, 100_000)],
+    new: [range(0, 100_001)],
   });
 });
 

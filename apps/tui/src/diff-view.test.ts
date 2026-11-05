@@ -498,3 +498,37 @@ test("wrapped span backgrounds survive scrolling, resize and live layout/theme c
     await ui.dispose();
   }
 });
+
+test("partial identifier edits emphasize whole words in both themes and layouts", async () => {
+  const data = review(
+    "@@ -1 +1 @@\n-getUser(user_name);\n+getUsers(user_id);\n",
+  );
+  for (const theme of Object.values(themes)) {
+    for (const mode of ["inline", "side-by-side"] as DiffMode[]) {
+      const ui = await createTestRenderer({ width: 120, height: 30 });
+      try {
+        mountReview(ui.renderer, data, theme, mode);
+        await ui.mockInput.pressKeys(["n"]);
+        await ui.renderOnce();
+        const frame = ui.captureCharFrame();
+        expect(frame).toContain("-getUser(user_name);");
+        expect(frame).toContain("+getUsers(user_id);");
+        const spans = ui.captureSpans().lines.flatMap((line) => line.spans);
+        for (const [role, words] of [
+          ["deletion", ["getUser", "user_name"]],
+          ["addition", ["getUsers", "user_id"]],
+        ] as const) {
+          const emphasized = spans.filter((span) =>
+            span.bg.equals(RGBA.fromHex(theme.diff[role].spanBackground)),
+          );
+          const text = emphasized.map((span) => span.text).join("");
+          for (const word of words) expect(text).toContain(word);
+          for (const punctuation of ["(", ")", ";"])
+            expect(text).not.toContain(punctuation);
+        }
+      } finally {
+        await ui.dispose();
+      }
+    }
+  }
+});
