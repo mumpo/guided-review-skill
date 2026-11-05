@@ -5,7 +5,7 @@ import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import type { DiffMode } from "./diff";
 import { mountReview } from "./view";
-import { themes } from "./theme";
+import { diffGutterBackground, themes } from "./theme";
 
 function review(unified?: string) {
   const snapshot = structuredClone(fixture) as ReviewSnapshot;
@@ -24,7 +24,7 @@ function review(unified?: string) {
 
 test("both themes paint full inline rows and full split panes, including unequal wrapping", async () => {
   const data = review(
-    `diff --git a/src/greeting.ts b/src/greeting.ts\n--- a/src/greeting.ts\n+++ b/src/greeting.ts\n@@ -1,2 +1,2 @@\n-${"x".repeat(85)}OLD_END\n+new\n same\n\\ No newline at end of file\n`,
+    `diff --git a/src/greeting.ts b/src/greeting.ts\n--- a/src/greeting.ts\n+++ b/src/greeting.ts\n@@ -1,2 +1,2 @@\n-${"x".repeat(85)}OLD_END\n+new\n same | context\n\\ No newline at end of file\n`,
   );
   for (const theme of Object.values(themes)) {
     for (const mode of ["inline", "side-by-side"] as DiffMode[]) {
@@ -43,13 +43,36 @@ test("both themes paint full inline rows and full split panes, including unequal
           lineText(index).includes("+new"),
         );
         expect(oldRow).toBeGreaterThan(0);
+        const oldGutter = captured.lines[oldRow].spans.find((span) =>
+          span.bg.equals(RGBA.fromHex(diffGutterBackground(theme, "deletion"))),
+        );
+        const newGutter = captured.lines[newRow].spans.find((span) =>
+          span.bg.equals(RGBA.fromHex(diffGutterBackground(theme, "addition"))),
+        );
+        for (const gutter of [oldGutter, newGutter]) {
+          expect(gutter).toBeDefined();
+          expect(gutter?.text).toContain("1");
+          expect(gutter?.text).not.toContain("|");
+        }
+        const contextLine = captured.lines.find((line) =>
+          line.spans.some((span) => span.text.includes("same | context")),
+        );
+        expect(contextLine).toBeDefined();
+        const contextGutter = contextLine?.spans.find(
+          (span) =>
+            span.text.includes("2") &&
+            span.bg.equals(RGBA.fromHex(theme.surface)),
+        );
+        expect(
+          contextGutter?.fg.equals(RGBA.fromHex(theme.diff.lineNumber)),
+        ).toBe(true);
         const cells = (index: number) =>
           captured.lines[index].spans.flatMap((span) =>
             Array(span.width).fill(span),
           );
         expect(
           cells(oldRow)[2].bg.equals(
-            RGBA.fromHex(theme.diff.deletion.background),
+            RGBA.fromHex(diffGutterBackground(theme, "deletion")),
           ),
         ).toBe(true);
         const added = captured.lines[newRow].spans.find((span) =>

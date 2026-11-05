@@ -68,38 +68,52 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - **Boundary:** Preserve the real diff text, reference selection, line numbers, and coverage semantics. Keep additions/deletions distinguishable by their existing signs as well as color.
 - **Acceptance:** Verify representative multi-file, split-file, and ungrouped diffs in GitHub Light and GitHub Dark, including wrapped lines, scrolling, resizing, and binary/unavailable markers. Confirm both layouts preserve selected source content and coverage. Verify positional pairing within contiguous selected change blocks, unmatched cells, wrapped-row alignment, configuration validation, live mode switching, the width threshold, and viewport anchoring.
 
-### 9. Mermaid diagram rendering
+### 9. Syntax highlighting for the diff viewer
+
+- [ ] Add language-aware syntax highlighting to code in both inline and side-by-side diff layouts, using the captured file paths to identify supported languages and the active GitHub theme for token colors.
+- **Depends on:** task 8.
+- **Boundary:** Keep viewing offline and preserve captured text, selected changes, line numbers, signs, omission markers, and coverage semantics. Preserve addition/deletion backgrounds and readable gutters. Handle partial hunks without assuming omitted source is available; unsupported languages or highlighting failures must retain readable plain text. Do not execute source content.
+- **Acceptance:** Verify representative languages and unknown extensions in GitHub Light and GitHub Dark, including additions, deletions, context, split-file sections, incomplete syntax across hunks, wrapped lines, scrolling, resizing, and live theme/layout changes. Confirm no source content is lost or changed and highlighting works without a checkout or network access.
+
+### 10. Highlight changed spans within line changes
+
+- [ ] Highlight the specific changed spans within paired old/new lines in both inline and side-by-side layouts, so replacements are easier to compare than with whole-line coloring alone. Combine span emphasis with syntax highlighting and the existing addition/deletion backgrounds.
+- **Depends on:** tasks 8–9.
+- **Boundary:** Derive span comparisons only from selected, paired changes within the existing contiguous change blocks; never compare across omission, context, or hunk boundaries or reveal unselected source. Preserve raw text, signs, line numbers, pairing, and coverage semantics. Unpaired additions/deletions retain readable whole-line styling.
+- **Acceptance:** Verify insertions, deletions, replacements, unequal change blocks, whitespace-only changes, repeated text, Unicode, and long wrapped lines in both themes and layouts. Check split-file selections, scrolling, resizing, and live theme/layout changes; changed spans must remain distinguishable alongside syntax colors without altering displayed source content.
+
+### 11. Mermaid diagram rendering
 
 - [ ] Adopt Mermaid for generated diagrams and investigate rendering them in the terminal using the Kitty graphics protocol. Record feasibility, required local dependencies, terminal capability detection, and behavior during scrolling and resizing. Implement the supported rendering path with a readable source fallback.
 - **Depends on:** tasks 4 and 7.
 - **Boundary:** Keep artifacts self-contained and viewing offline. Preserve existing plain-text diagrams; update generation guidance and document how Mermaid is distinguished from legacy text. Treat diagram source as untrusted content. Kitty graphics support is an investigation outcome, not a requirement to exclude terminals that lack it.
 - **Acceptance:** Use representative Mermaid fixtures to verify light/dark styling, offline rendering, and clear handling of malformed diagrams or missing rendering dependencies. Demonstrate graphics rendering, scrolling, resizing, and cleanup in a compatible terminal if feasible; otherwise record the blocker and chosen fallback. Verify readable fallback in unsupported terminals and compatibility with existing text diagrams.
 
-### 10. Markdown formatting in the TUI
+### 12. Markdown formatting in the TUI
 
 - [ ] Add basic themed Markdown formatting for the summary, PR description, and section explanations: headings, paragraphs, lists, emphasis, inline code, fenced code blocks, and links. Keep diagram rendering separate from narrative formatting.
 - **Depends on:** task 7.
 - **Boundary:** Read-only presentation; do not execute embedded code or HTML. Preserve readable text for unsupported Markdown constructs and keep link destinations visible without automatically opening them.
 - **Acceptance:** Verify representative Markdown fixtures in both default themes, including nested lists, code blocks, long links, narrow terminals, scrolling, and resizing. Ensure formatted narrative remains readable alongside section diffs and diagrams, with no lost content or navigation regressions.
 
-### 11. Web foundation
+### 13. Web foundation
 
 - [ ] Set up React, Vite, Tailwind CSS, and shadcn/ui. Add a CLI that accepts a local artifact path, binds a server to localhost, serves only the viewer and selected artifact, and opens the browser.
 - **Depends on:** tasks 1–2.
 - **Boundary:** No remote hosting, GitHub authentication, or review submission.
 - **Acceptance:** The command opens a valid fixture offline; invalid files produce actionable errors; server and browser-launch failures are reported clearly.
 
-### 12. Web review experience
+### 14. Web review experience
 
 - [ ] Build the GitHub-inspired PR header and summary, ordered section navigation, explanations, optional diagrams, and unified diffs with file names and line numbers. Use the shared core for validation and diff resolution.
-- **Depends on:** task 11.
+- **Depends on:** task 13.
 - **Boundary:** Read-only; no GitHub comments or submission.
 - **Acceptance:** Verify navigation, real diff content, split-file and multi-file sections, keyboard accessibility, and responsive layouts using representative fixtures.
 
-### 13. End-to-end hardening
+### 15. End-to-end hardening
 
 - [ ] Exercise generation and both viewers together, resolve integration gaps, and finish installation, usage, troubleshooting, and artifact documentation.
-- **Depends on:** tasks 4, 6–10, and 12.
+- **Depends on:** tasks 4, 6–12, and 14.
 - **Boundary:** Do not add deferred commenting, review submission, or additional viewers.
 - **Acceptance:** Generate a snapshot for an accessible real PR; compare metadata, commit IDs, and full diff coverage with GitHub; open it offline in both viewers; run the full workspace checks.
 
@@ -117,3 +131,7 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - Task 7: Added GitHub Light/Dark semantic palettes for text, backgrounds, navigation, scrollbars, diffs, diagrams, and Markdown. Per the agreed implementation plan, automatic selection follows the terminal's reported appearance through OpenTUI 0.8.2 rather than OS-specific settings. Initial detection waits up to 300 ms, falls back to GitHub Dark, and follows late replies/live changes without resetting navigation or scrolling. Fixed overrides use `--theme` → `GUIDED_REVIEW_THEME` → optional `$XDG_CONFIG_HOME/guided-review/config.json` (default `~/.config/guided-review/config.json`) → `auto`. Invalid sources fail before UI initialization, even when overridden. README documents detection, fallback, configuration, and precedence. All 49 tests, lint, formatting, and typecheck pass, including palette contrast (at least 4.5:1), actual rendered colors, detection lifecycle, precedence, errors, and interaction preservation. Opened the real PR fixture in a PTY under both fixed themes, navigated/scrolled and quit cleanly; injected OSC background replies switched automatic mode light/dark. No physical terminal appearance toggle was exercised. Detailed per-line diff coloring remains task 8, the next task.
 
 - Task 8: Added semantic diff rows and themed inline/side-by-side presentation without changing artifact data, reference selection, or coverage. Auto chooses per file’s selected section changes: both additions and deletions use side-by-side at 100 available diff columns or wider; single-sided selections and narrower widths use inline. Side-by-side pairs changes positionally within contiguous selected blocks, preserves omissions/hunk boundaries, duplicates selected context, and associates no-newline markers with their side. Added/deleted backgrounds fill each row or pane, including wrapped continuations and unequal paired heights. `--diff-mode` overrides optional config `diffMode`, then defaults to `auto`; `d` cycles the session preference, file headers label the effective layout, and forced side-by-side stays split at narrow widths. Configuration is read once with existing theme precedence preserved. Mode/width changes anchor visible diff rows where possible, and theme changes recolor in place. All 58 tests, lint, formatting, and typecheck pass, including actual rendered colors/background extent, alignment, the width threshold, configuration errors, scrolling/resizing, markers, empty sections, and navigation. Manually opened the committed real PR fixture offline in PTYs under both themes, navigated both sections, scrolled, switched layouts, and quit cleanly; no physical-terminal visual inspection was performed. Task 9 is next.
+
+- Planning update: Finish diff-viewer syntax highlighting (task 9), then changed-span highlighting within line changes (task 10), before continuing to Mermaid diagrams and Markdown formatting. Former tasks 9–13 are now tasks 11–15; later dependencies are updated accordingly. Syntax highlighting is the next implementation task.
+
+- Task 8 follow-up: Replaced rendered line-number pipe separators with shaded gutters in both layouts, using GitHub’s supplied light colors (`#aceebb` additions, `#ffcecb` deletions) and dark alpha colors (`#2ea04366` additions, `#f8514966` deletions). Dark colors are composited over the diff canvas for terminal rendering; context gutters use the neutral surface. Captured source text, including literal pipes, remains intact. All 59 tests, lint, formatting, and typecheck pass, including rendered gutter colors, alpha compositing, and contrast.

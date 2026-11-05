@@ -14,7 +14,7 @@ import {
   effectiveDiffMode,
   layoutFileRows,
 } from "./diff";
-import type { Theme } from "./theme";
+import { type Theme, diffGutterBackground } from "./theme";
 
 /** Layout owns presentation only; all rows come from resolved captured changes. */
 export class DiffView extends BoxRenderable {
@@ -133,7 +133,10 @@ export class DiffView extends BoxRenderable {
           const text =
             full === file.rows[0] && full.role === "file"
               ? `${full.text} [${mode}]`
-              : full.text;
+              : full.text ===
+                  "Old | New | Diff (selected lines; original hunk headers)"
+                ? "Old   New   Diff (selected lines; original hunk headers)"
+                : full.text;
           node = new BoxRenderable(this.renderer, {
             width: "100%",
             flexDirection: "column",
@@ -216,7 +219,13 @@ export class DiffView extends BoxRenderable {
       node.content = new StyledText([
         {
           __isChunk: true,
-          text: cell.prefix,
+          // Prefixes are generated gutters, never captured source text.
+          text: cell.prefix.replaceAll(" | ", "   "),
+          bg: RGBA.fromHex(
+            cell.role === "addition" || cell.role === "deletion"
+              ? diffGutterBackground(theme, cell.role)
+              : theme.surface,
+          ),
           fg: RGBA.fromHex(changed ? foreground : theme.diff.lineNumber),
         },
         { __isChunk: true, text: cell.text, fg: RGBA.fromHex(foreground) },
