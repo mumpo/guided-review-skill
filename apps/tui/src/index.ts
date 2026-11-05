@@ -1,21 +1,24 @@
 import { loadReview } from "./load";
+import { loadThemePreference, parseArgs, usage } from "./config";
 
-export const usage = "Usage: bun run dev:tui <path/to/review.json>";
+export { usage } from "./config";
 
 export async function main(args = process.argv.slice(2)): Promise<void> {
-  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
+  const options = parseArgs(args);
+  if (options.help) {
     console.log(usage);
     return;
   }
-  if (args.length !== 1) throw new Error(usage);
+  const preference = await loadThemePreference(options.theme);
 
   // Validate before loading native UI code or taking control of the terminal.
-  const review = await loadReview(args[0]);
+  const review = await loadReview(options.path);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error("The viewer needs an interactive terminal (TTY).");
   }
   const { createCliRenderer } = await import("@opentui/core");
   const { mountReview } = await import("./view");
+  const { startTheme } = await import("./theme-session");
   const renderer = await createCliRenderer({
     exitOnCtrlC: true,
     screenMode: "alternate-screen",
@@ -23,7 +26,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     useMouse: false,
   });
   try {
-    mountReview(renderer, review);
+    let applyTheme: ReturnType<typeof mountReview> | undefined;
+    await startTheme(renderer, preference, (theme) => {
+      if (applyTheme) applyTheme(theme);
+      else applyTheme = mountReview(renderer, review, theme);
+    });
     await renderer.closed;
   } finally {
     renderer.destroy();

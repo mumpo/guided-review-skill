@@ -82,6 +82,11 @@ test("CLI reports usage, invalid files, and noninteractive startup failures", as
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
+      env: {
+        ...process.env,
+        XDG_CONFIG_HOME: temp,
+        GUIDED_REVIEW_THEME: undefined,
+      },
     });
     const [code, stdout, stderr] = await Promise.all([
       child.exited,
@@ -91,6 +96,18 @@ test("CLI reports usage, invalid files, and noninteractive startup failures", as
     return { code, stdout, stderr };
   }
   expect(await run(["--help"])).toMatchObject({ code: 0, stderr: "" });
+  expect(await run(["--theme=invalid", fixture])).toMatchObject({
+    code: 1,
+    stderr: expect.stringContaining(
+      "--theme: expected auto, github-light, or github-dark",
+    ),
+  });
+  for (const theme of ["auto", "github-light", "github-dark"]) {
+    expect(await run(["--theme", theme, fixture])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("interactive terminal (TTY)"),
+    });
+  }
   expect(await run([])).toMatchObject({
     code: 1,
     stderr: expect.stringContaining("Usage:"),

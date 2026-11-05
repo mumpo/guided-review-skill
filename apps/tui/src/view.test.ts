@@ -3,11 +3,92 @@ import { createTestRenderer, KeyCodes } from "@opentui/core/testing";
 import { analyzeDiffs } from "../../../packages/core/src";
 import { loadReview } from "./load";
 import { mountReview } from "./view";
+import { RGBA } from "@opentui/core";
+import { themes } from "./theme";
+import { startTheme } from "./theme-session";
 
 const fixture = new URL(
   "../../../packages/core/fixtures/valid.json",
   import.meta.url,
 ).pathname;
+
+test("both themes paint explicit readable colors without changing displayed content", async () => {
+  const review = await loadReview(fixture);
+  const frames: string[] = [];
+  for (const theme of Object.values(themes)) {
+    const ui = await createTestRenderer({ width: 100, height: 45 });
+    try {
+      mountReview(ui.renderer, review, theme);
+      await ui.renderOnce();
+      frames.push(ui.captureCharFrame());
+      const spans = () => ui.captureSpans().lines.flatMap((line) => line.spans);
+      function expectColor(text: string, fg: string, bg: string) {
+        const span = spans().find((span) => span.text.includes(text));
+        expect(span).toBeDefined();
+        expect(span?.fg.equals(RGBA.fromHex(fg))).toBe(true);
+        expect(span?.bg.equals(RGBA.fromHex(bg))).toBe(true);
+      }
+      expectColor(
+        "#42 · Summary",
+        theme.navigation.foreground,
+        theme.navigation.background,
+      );
+      expectColor("Update the greeting", theme.text, theme.background);
+      expectColor("q/Ctrl+C: quit", theme.muted, theme.surface);
+      // The viewport margin is painted too, even when the terminal has the opposite appearance.
+      expect(spans()[0].bg.equals(RGBA.fromHex(theme.background))).toBe(true);
+      await ui.mockInput.pressKeys(["n"]);
+      await ui.renderOnce();
+      expectColor(
+        "greeting -> guide",
+        theme.diagram.foreground,
+        theme.diagram.background,
+      );
+      expectColor("+hello world", theme.diff.text, theme.diff.background);
+      frames.push(ui.captureCharFrame());
+    } finally {
+      await ui.dispose();
+    }
+  }
+  expect(frames[0]).toBe(frames[2]);
+  expect(frames[1]).toBe(frames[3]);
+});
+
+test("live appearance changes preserve page, scroll position, and resizing", async () => {
+  const review = await loadReview(fixture);
+  review.snapshot.sections[0].explanation = Array.from(
+    { length: 80 },
+    (_, i) => `Narrative line ${i + 1}`,
+  ).join("\n");
+  const ui = await createTestRenderer({ width: 65, height: 20 });
+  try {
+    const apply = mountReview(ui.renderer, review);
+    await startTheme(ui.renderer, "auto", apply);
+    await ui.mockInput.pressKeys(["n", "j", "j", "j", "j", "j"]);
+    await ui.renderOnce();
+    const before = ui.captureCharFrame();
+    ui.renderer.emit("theme_mode", "light");
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toBe(before);
+    const heading = ui
+      .captureSpans()
+      .lines[0].spans.find((span) => span.text.includes("#42"));
+    expect(
+      heading?.fg.equals(
+        RGBA.fromHex(themes["github-light"].navigation.foreground),
+      ),
+    ).toBe(true);
+    ui.resize(35, 20);
+    await ui.renderOnce();
+    const narrow = ui.captureCharFrame();
+    ui.renderer.emit("theme_mode", "dark");
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toBe(narrow);
+    expect(narrow).toContain("Narrative line");
+  } finally {
+    await ui.dispose();
+  }
+});
 
 test("opens a local fixture and navigates ordered sections with real key events", async () => {
   const review = await loadReview(fixture);
