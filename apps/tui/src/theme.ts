@@ -17,11 +17,13 @@ export interface Theme {
       foreground: string;
       background: string;
       gutterBackground: string;
+      spanBackground: string;
     };
     deletion: {
       foreground: string;
       background: string;
       gutterBackground: string;
+      spanBackground: string;
     };
     context: string;
     hunk: string;
@@ -55,11 +57,13 @@ export const themes: Record<ThemeName, Theme> = {
         foreground: "#116329",
         background: "#dafbe1",
         gutterBackground: "#aceebb",
+        spanBackground: "#aceebb",
       },
       deletion: {
         foreground: "#82071e",
         background: "#ffebe9",
         gutterBackground: "#ffcecb",
+        spanBackground: "#ffcecb",
       },
       context: "#1f2328",
       hunk: "#0550ae",
@@ -95,11 +99,13 @@ export const themes: Record<ThemeName, Theme> = {
         foreground: "#aff5b4",
         background: "#033a16",
         gutterBackground: "#2ea04366",
+        spanBackground: "#1a4a29",
       },
       deletion: {
         foreground: "#ffdcd7",
         background: "#67060c",
         gutterBackground: "#f8514966",
+        spanBackground: "#6b2b2b",
       },
       context: "#e6edf3",
       hunk: "#79c0ff",

@@ -83,13 +83,19 @@ Set `"diffMode": "side-by-side"` in the same user config file described below fo
 
 Inline mode displays the unified diff with old/new line numbers. Side-by-side mode displays old lines on the left and new lines on the right, with separate line numbers and visible `-`/`+` signs. Lines pair in original order within each contiguous selected change block; unmatched lines leave the other pane blank. Context appears on both sides. Omission markers prevent pairing across unselected changes, and no unselected lines are added to fill a pane. Both panes wrap independently and stay aligned; forced side-by-side remains split at narrow widths. Mode switches and resizing retain the current section and anchor the visible diff row where possible.
 
+### Changed spans
+
+Paired old/new lines emphasize their changed characters with stronger green/red backgrounds in both layouts, alongside syntax colors. Comparison follows the same positional pairs as side-by-side layout and uses only selected changes within each contiguous block. Context, omissions, and hunk boundaries stop comparison; unmatched lines keep whole-line styling. Signs, line numbers, and padding retain their existing colors.
+
+Comparison treats Unicode graphemes (including combining characters and emoji sequences) as units and preserves whitespace exactly, without adding visible markers. Insertions or deletions within a pair emphasize only the side containing changed characters. For expensive comparisons exceeding 250,000 grapheme-pair cells after shared prefix/suffix trimming, the remaining differing region receives emphasis as a whole. Viewing remains offline, and layout/theme changes reuse the computed ranges.
+
 ### Syntax highlighting
 
 Both diff layouts highlight code using bundled language grammars and the active GitHub Light or GitHub Dark token palette. Supported languages are JavaScript, TypeScript (including declaration files), JSX, TSX, Python, Go, Rust, Java, C/C++, JSON, YAML, HTML, CSS, shell, SQL, and Markdown. Language selection uses captured filename extensions, including common aliases such as `.mjs`, `.cts`, `.hpp`, `.yml`, and `.bash`. Unknown extensions and extensionless paths remain plain text; source is never executed.
 
 Highlighting works offline after dependencies are installed, without a checkout or language server. Old and new source are highlighted independently using their respective paths, including renames. Each selected fragment starts with fresh syntax state at hunk and omission boundaries, so highlighting of incomplete constructs is best effort. Omitted source is never fetched or reconstructed. Highlighting failures retain readable plain text.
 
-Syntax colors affect code foregrounds only. Addition/deletion backgrounds, signs, gutters, line numbers, and markers retain their diff styling. Token colors that lack sufficient contrast against a row's background are darkened on light backgrounds or lightened on dark backgrounds while retaining their hue. GitHub's current default syntax palettes provide the base colors, including `#cf222e` for light-theme keywords. Theme changes recolor the current diff without resetting navigation or scrolling; layout changes reuse the highlighted source.
+Syntax colors affect code foregrounds only, including over the stronger changed-span backgrounds. Addition/deletion backgrounds, signs, gutters, line numbers, and markers retain their diff styling. Token colors that lack sufficient contrast against a row's background are darkened on light backgrounds or lightened on dark backgrounds while retaining their hue. GitHub's current default syntax palettes provide the base colors, including `#cf222e` for light-theme keywords. Theme changes recolor the current diff without resetting navigation or scrolling; layout changes reuse the highlighted source.
 
 ### Terminal themes
 

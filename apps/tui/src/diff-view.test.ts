@@ -110,7 +110,7 @@ test("both themes paint full inline rows and full split panes, including unequal
           ).toBe(true);
           expect(
             cells(oldRow + 1)[2].bg.equals(
-              RGBA.fromHex(theme.diff.deletion.background),
+              RGBA.fromHex(theme.diff.deletion.spanBackground),
             ),
           ).toBe(true);
         }
@@ -361,5 +361,140 @@ test("syntax foregrounds follow live themes and layouts without changing source 
     } finally {
       await ui.dispose();
     }
+  }
+});
+
+test("changed source spans combine with syntax in both themes/layouts and plain text fallback", async () => {
+  for (const path of ["src/greeting.ts", "notes.unknown"]) {
+    const data = review(
+      '@@ -1,3 +1,4 @@\n-const value = "old";  \n+const value = "new";  \n unchanged\n-tail\n+tail!\n+unpaired\n',
+    );
+    data.snapshot.files[0].oldPath = path;
+    data.snapshot.files[0].newPath = path;
+    data.analysis = analyzeDiffs(data.snapshot);
+    const coverage = JSON.stringify(data.analysis.uncovered);
+    for (const mode of ["inline", "side-by-side"] as DiffMode[]) {
+      const ui = await createTestRenderer({ width: 120, height: 40 });
+      try {
+        const applyTheme = mountReview(
+          ui.renderer,
+          data,
+          themes["github-dark"],
+          mode,
+        );
+        await ui.mockInput.pressKeys(["n"]);
+        let before = "";
+        for (const theme of [themes["github-dark"], themes["github-light"]]) {
+          applyTheme(theme);
+          await ui.renderOnce();
+          const frame = ui.captureCharFrame();
+          if (before) expect(frame).toBe(before);
+          before = frame;
+          for (const text of [
+            '-const value = "old";  ',
+            '+const value = "new";  ',
+            "-tail",
+            "+tail!",
+            "+unpaired",
+          ])
+            expect(frame).toContain(text);
+          const spans = ui.captureSpans().lines.flatMap((line) => line.spans);
+          for (const [role, text] of [
+            ["deletion", "old"],
+            ["addition", "new"],
+          ] as const) {
+            const emphasized = spans.filter((s) =>
+              s.bg.equals(RGBA.fromHex(theme.diff[role].spanBackground)),
+            );
+            expect(emphasized.map((s) => s.text).join("")).toContain(text);
+            const source = emphasized.filter((s) => s.text.includes(text));
+            expect(source.length).toBeGreaterThan(0);
+            expect(source.some((s) => s.text.includes('"'))).toBe(false);
+            const token = path.endsWith(".ts")
+              ? theme.name === "github-light"
+                ? "#0a3069"
+                : "#a5d6ff"
+              : undefined;
+            expect(
+              source[0].fg.equals(
+                RGBA.fromHex(
+                  readableTokenColor(
+                    token,
+                    theme.diff[role].foreground,
+                    theme.diff[role].spanBackground,
+                  ),
+                ),
+              ),
+            ).toBe(true);
+          }
+          const unpaired = spans.find((s) => s.text.includes("unpaired"));
+          expect(
+            unpaired?.bg.equals(RGBA.fromHex(theme.diff.addition.background)),
+          ).toBe(true);
+          const insertion = spans.find((s) => s.text === "!");
+          expect(
+            insertion?.bg.equals(
+              RGBA.fromHex(theme.diff.addition.spanBackground),
+            ),
+          ).toBe(true);
+          expect(JSON.stringify(data.analysis.uncovered)).toBe(coverage);
+        }
+      } finally {
+        await ui.dispose();
+      }
+    }
+  }
+});
+
+test("wrapped span backgrounds survive scrolling, resize and live layout/theme changes", async () => {
+  const data = review(
+    `@@ -1,20 +1,20 @@\n${Array.from({ length: 20 }, (_, i) => `-const row${i} = "${"a".repeat(130)}";\n+const row${i} = "${"b".repeat(130)}";\n`).join("")}`,
+  );
+  const ui = await createTestRenderer({ width: 120, height: 24 });
+  try {
+    const applyTheme = mountReview(
+      ui.renderer,
+      data,
+      themes["github-dark"],
+      "inline",
+    );
+    await ui.mockInput.pressKeys(["n", ...Array(25).fill("j")]);
+    await ui.renderOnce();
+    for (const theme of [themes["github-dark"], themes["github-light"]]) {
+      applyTheme(theme);
+      for (const width of [120, 65]) {
+        ui.resize(width, 24);
+        for (let mode = 0; mode < 3; mode++) {
+          await ui.renderOnce();
+          const spans = ui.captureSpans().lines.flatMap((line) => line.spans);
+          const changed = spans.filter((s) => /[ab]{4}/.test(s.text));
+          expect(changed.length).toBeGreaterThan(0);
+          for (const span of changed) {
+            const role = span.text.includes("aaaa") ? "deletion" : "addition";
+            expect(
+              span.bg.equals(RGBA.fromHex(theme.diff[role].spanBackground)),
+            ).toBe(true);
+            expect(
+              span.fg.equals(
+                RGBA.fromHex(
+                  readableTokenColor(
+                    theme.name === "github-light" ? "#0a3069" : "#a5d6ff",
+                    theme.diff[role].foreground,
+                    theme.diff[role].spanBackground,
+                  ),
+                ),
+              ),
+            ).toBe(true);
+          }
+          await ui.mockInput.pressKeys(["d"]);
+        }
+      }
+    }
+    await ui.mockInput.pressKeys(Array(100).fill("\u001b[6~"));
+    ui.resize(160, 40);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("row19");
+  } finally {
+    await ui.dispose();
   }
 });
