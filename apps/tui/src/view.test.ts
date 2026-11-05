@@ -44,11 +44,14 @@ test("both themes paint explicit readable colors without changing displayed cont
         theme.diagram.foreground,
         theme.diagram.background,
       );
-      expectColor(
-        "+hello world",
-        theme.diff.addition.foreground,
-        theme.diff.addition.background,
-      );
+      expect(ui.captureCharFrame()).toContain("+hello world");
+      const sign = spans().find((span) => span.text === "+");
+      expect(
+        sign?.fg.equals(RGBA.fromHex(theme.diff.addition.foreground)),
+      ).toBe(true);
+      expect(
+        sign?.bg.equals(RGBA.fromHex(theme.diff.addition.background)),
+      ).toBe(true);
       frames.push(ui.captureCharFrame());
     } finally {
       await ui.dispose();
