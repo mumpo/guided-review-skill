@@ -38,7 +38,8 @@ function png() {
   ]);
 }
 
-const content = "Before\n```mermaid\nflowchart LR\nA-->B\n```\nAfter";
+const content =
+  "# Before\n**formatted narrative**\n```mermaid\nflowchart LR\nA-->B\n```\nAfter";
 function deferred() {
   let resolve!: (value: Uint8Array) => void;
   const promise = new Promise<Uint8Array>((done) => {
@@ -65,6 +66,9 @@ for (const theme of Object.values(themes)) {
       await ui.renderOnce();
       const frame = ui.captureCharFrame();
       expect(frame).toContain("```mermaid");
+      expect(frame).not.toContain("# Before");
+      expect(frame).not.toContain("**formatted narrative**");
+      expect(frame).toContain("formatted narrative");
       expect(frame).toContain("A-->B");
       expect(frame.indexOf("Before")).toBeLessThan(frame.indexOf("After"));
       expect(frame).toContain("terminal graphics unavailable");

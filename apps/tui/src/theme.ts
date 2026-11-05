@@ -1,7 +1,7 @@
 export type ThemeName = "github-light" | "github-dark";
 export type ThemePreference = ThemeName | "auto";
 
-/** Semantic colors shared by current presentation and upcoming rich renderers. */
+/** Semantic colors shared by narrative, diagrams, and diffs. */
 export interface Theme {
   name: ThemeName;
   background: string;

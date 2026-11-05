@@ -54,7 +54,7 @@ bun run dev:tui path/to/review.json
 
 Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cli-pr-1.json`. Paths are relative to your current directory; absolute paths also work. Viewing works offline, without `gh`, authentication, or a PR checkout.
 
-The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation and referenced real diff with file paths, change status, and old/new line numbers. Optional fenced Mermaid diagrams appear within section explanations. General Markdown is displayed as source; Mermaid can render as graphics with the optional local setup below.
+The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation and referenced real diff with file paths, change status, and old/new line numbers. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
 
 Line references show only selected changes, with original hunk headers and explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Renames show both paths, while binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
 
@@ -69,6 +69,14 @@ Line references show only selected changes, with original hunk headers and expli
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
 Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
+
+### Markdown formatting
+
+The summary, PR description, and section explanations support headings, paragraphs, nested ordered and unordered lists, bold and italic emphasis, inline code, fenced code blocks, and links. Titles, metadata, coverage notices, and section navigation remain literal text. Links show their destinations alongside their labels, including on terminals with hyperlink support; the viewer does not open them. Reference-style links resolve within each Markdown field, including across diagrams in explanations.
+
+Fenced code uses the same bundled offline Shiki languages and GitHub palettes as the diff viewer. Fence info strings accept language names and common aliases such as `ts`, `py`, `c++`, and `bash`; unsupported or absent languages and highlighting failures use themed plain code. Code whitespace is preserved after Markdown indentation handling, long lines wrap, and low-contrast syntax colors are adjusted against the code background. Inline code has a distinct background. Soft narrative line breaks remain visible, and lists retain their indentation on wrapped continuations.
+
+Unsupported constructs, including HTML, images, tables, blockquotes, and task lists, remain readable source. No embedded code or HTML is executed, and no linked images or other external resources are loaded. Unclosed fences remain source. Mermaid graphics are limited to eligible fences in section explanations; elsewhere their fences remain literal source. Theme changes recolor narrative in place, and normal scrolling, resizing, and section navigation apply.
 
 ### Mermaid diagrams
 
@@ -133,7 +141,7 @@ For a persistent preference, set `GUIDED_REVIEW_THEME` in your shell or create `
 
 Precedence is `--theme` → `GUIDED_REVIEW_THEME` → config file → `auto`. All sources accept `auto`, `github-light`, or `github-dark`; an explicit `auto` restores automatic selection even when a lower-priority source names a fixed theme. Fixed themes ignore terminal appearance changes. A missing config file is normal and the viewer never creates one. Malformed/unreadable config files, unknown keys, and invalid theme or diff-mode values produce errors before terminal initialization, including when another source overrides them. An empty environment value is invalid; unset it to use the config file. `--help` works without loading configuration.
 
-Both palettes set text and background colors explicitly for the viewport, navigation, narrative, diagrams, diffs, help, and scrollbars. Added and deleted lines use distinct foregrounds and full-row backgrounds (full-pane backgrounds in side-by-side mode), including wrapped continuations. Line-number gutters use GitHub’s green or red background colors on changed lines, replacing pipe separators; context gutters use the theme’s neutral surface. Context, file/hunk headers, line numbers, omission markers, and non-text messages use semantic theme colors. Markdown formatting remains planned separately.
+Both palettes set text and background colors explicitly for the viewport, navigation, narrative, diagrams, diffs, help, and scrollbars. Added and deleted lines use distinct foregrounds and full-row backgrounds (full-pane backgrounds in side-by-side mode), including wrapped continuations. Line-number gutters use GitHub’s green or red background colors on changed lines, replacing pipe separators; context gutters use the theme’s neutral surface. Context, file/hunk headers, line numbers, omission markers, and non-text messages use semantic theme colors. Narrative Markdown uses the same active theme.
 
 ## Collect a pull request
 

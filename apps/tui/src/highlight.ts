@@ -68,6 +68,15 @@ export function languageForPath(path?: string | null): string | undefined {
     : undefined;
 }
 
+/** Fence info strings select bundled grammars only, never external parsers. */
+export function languageForFence(info = ""): string | undefined {
+  const name = info.trim().split(/\s+/)[0].toLowerCase();
+  if (name === "c++") return "cpp";
+  if (name === "shell") return "shellscript";
+  if (Object.hasOwn(extensions, name)) return extensions[name];
+  return Object.values(extensions).includes(name) ? name : undefined;
+}
+
 export interface SyntaxSpan {
   text: string;
   color?: string;
@@ -126,6 +135,39 @@ const tokenize: Tokenizer = (source, language, theme) => {
     );
 };
 
+/** Validate exact reconstruction before either viewer uses syntax colors. */
+export function highlightSource(
+  source: string,
+  language: string | undefined,
+  tokenizer: Tokenizer = tokenize,
+): Record<ThemeName, SyntaxSpan[][]> | undefined {
+  if (!language) return;
+  const bodies = source.split("\n");
+  try {
+    const colors = {} as Record<ThemeName, SyntaxSpan[][]>;
+    for (const theme of ["github-light", "github-dark"] as const) {
+      const lines = tokenizer(source, language, theme);
+      if (
+        lines.length !== bodies.length ||
+        lines.some(
+          (spans, i) =>
+            spans.map((span) => span.text).join("") !== bodies[i] ||
+            spans.some(
+              (span) =>
+                span.color !== undefined && !/^#[\da-f]{6}$/i.test(span.color),
+            ),
+        )
+      )
+        return;
+      colors[theme] = lines;
+    }
+    return colors;
+  } catch {
+    // Highlighting must never prevent reading captured content.
+    return;
+  }
+}
+
 /** Only selected source enters the tokenizer; gaps reset both independent streams. */
 export function highlightFile(
   file: FileRows,
@@ -145,25 +187,8 @@ export function highlightFile(
       const bodies = fragment.map((line) =>
         line.raw.replace(/\r?\n$/, "").slice(1),
       );
-      try {
-        const colors = {} as Record<ThemeName, SyntaxSpan[][]>;
-        for (const theme of ["github-light", "github-dark"] as const) {
-          const lines = tokenizer(bodies.join("\n"), language, theme);
-          if (
-            lines.length !== bodies.length ||
-            lines.some(
-              (spans, i) =>
-                spans.map((span) => span.text).join("") !== bodies[i] ||
-                spans.some(
-                  (span) =>
-                    span.color !== undefined &&
-                    !/^#[\da-f]{6}$/i.test(span.color),
-                ),
-            )
-          )
-            throw new Error("Tokenizer changed captured source");
-          colors[theme] = lines;
-        }
+      const colors = highlightSource(bodies.join("\n"), language, tokenizer);
+      if (colors) {
         fragment.forEach((line, i) => {
           const entry = result.get(line) ?? {};
           entry[side] = {
@@ -172,8 +197,6 @@ export function highlightFile(
           };
           result.set(line, entry);
         });
-      } catch {
-        // Unknown/incomplete syntax and engine failures must never block review.
       }
       fragment = [];
     };

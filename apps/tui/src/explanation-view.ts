@@ -14,8 +14,10 @@ import {
   renderDiagram,
 } from "./mermaid";
 import type { Theme } from "./theme";
+import { MarkdownView, markdownLinks } from "./markdown-view";
+import type { Links } from "marked";
 
-/** Diagram presentation only. Narrative remains literal Markdown until task 12. */
+/** Ordered Markdown narrative and independently rendered Mermaid blocks. */
 export class ExplanationView extends BoxRenderable {
   private blocks: { block: ExplanationBlock; node: BoxRenderable }[] = [];
   private controller = new AbortController();
@@ -23,6 +25,7 @@ export class ExplanationView extends BoxRenderable {
   private signature = "";
   private timer?: ReturnType<typeof setTimeout>;
   private palette: Theme;
+  private links: Links = {};
   private onFrame = () => {
     if (
       !this.timer &&
@@ -52,6 +55,7 @@ export class ExplanationView extends BoxRenderable {
   setContent(content: string) {
     this.controller.abort();
     for (const child of this.getChildren()) child.destroyRecursively();
+    this.links = markdownLinks(content);
     this.blocks = explanationBlocks(content).map((block) => {
       const node = new BoxRenderable(this.renderer, {
         width: "100%",
@@ -115,16 +119,25 @@ export class ExplanationView extends BoxRenderable {
   }
 
   private text(node: BoxRenderable, content: string, diagram: boolean) {
+    const markdown = node.getChildren()[0];
+    if (!diagram && markdown instanceof MarkdownView) {
+      markdown.setTheme(this.palette);
+      return;
+    }
     for (const child of node.getChildren()) child.destroyRecursively();
+    if (!diagram) {
+      const view = new MarkdownView(this.renderer, this.palette);
+      view.setContent(content, this.links);
+      node.add(view);
+      return;
+    }
     node.add(
       new TextRenderable(this.renderer, {
         content,
         wrapMode: "word",
         flexShrink: 0,
-        fg: diagram
-          ? this.palette.diagram.foreground
-          : this.palette.markdown.text,
-        bg: diagram ? this.palette.diagram.background : this.palette.background,
+        fg: this.palette.diagram.foreground,
+        bg: this.palette.diagram.background,
       }),
     );
   }
