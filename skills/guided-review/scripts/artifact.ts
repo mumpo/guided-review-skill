@@ -85,6 +85,48 @@ export function buildArtifact(
   collection: unknown,
   value: unknown,
 ): ReviewSnapshot {
+  return buildArtifactWithReport(collection, value).snapshot;
+}
+
+/** A diff-free projection for narrative inspection, only called after verification. */
+function inspectionReport(
+  snapshot: ReviewSnapshot,
+  automaticallyUngrouped?: ChangeReference[],
+) {
+  return {
+    validation: {
+      collectionPreserved: true,
+      referencesValid: true,
+      completeCoverage: true,
+    },
+    pullRequest: {
+      url: snapshot.pullRequest.url,
+      title: snapshot.pullRequest.title,
+      baseCommit: snapshot.pullRequest.baseCommit,
+      headCommit: snapshot.pullRequest.headCommit,
+    },
+    summary: snapshot.summary,
+    sections: snapshot.sections.map(({ title, explanation, references }) => ({
+      title,
+      explanation,
+      references,
+    })),
+    files: snapshot.files.map(({ id, oldPath, newPath, status, diff }) => ({
+      id,
+      oldPath,
+      newPath,
+      status,
+      diff: {
+        kind: diff.kind,
+        ...(diff.kind === "unavailable" ? { reason: diff.reason } : {}),
+      },
+    })),
+    ...(automaticallyUngrouped === undefined ? {} : { automaticallyUngrouped }),
+  };
+}
+
+/** Build a verified snapshot and identify the exact references added by fallback coverage. */
+export function buildArtifactWithReport(collection: unknown, value: unknown) {
   const original = collectionSnapshot(collection);
   const draft = object(value, "narrative");
   for (const key of Object.keys(draft)) {
@@ -141,7 +183,8 @@ export function buildArtifact(
     }
     ungrouped.references.push(...references);
   }
-  return verifyArtifact(collection, snapshot);
+  const verified = verifyArtifact(collection, snapshot);
+  return { snapshot: verified, report: inspectionReport(verified, references) };
 }
 
 async function readJson(path: string): Promise<unknown> {
@@ -156,8 +199,10 @@ async function readJson(path: string): Promise<unknown> {
 
 if (import.meta.main) {
   try {
-    const [command, collectionPath, inputPath, outputPath, ...extra] =
-      process.argv.slice(2);
+    const args = process.argv.slice(2);
+    const report = args.at(-1) === "--report";
+    if (report) args.pop();
+    const [command, collectionPath, inputPath, outputPath, ...extra] = args;
     if (
       !collectionPath ||
       !inputPath ||
@@ -166,23 +211,33 @@ if (import.meta.main) {
       (command === "build" ? !outputPath : outputPath !== undefined)
     )
       throw new Error(
-        "Usage: bun run artifact.ts build <collection.json> <narrative.json> <output.json> | validate <collection.json> <artifact.json>",
+        "Usage: bun run artifact.ts build <collection.json> <narrative.json> <output.json> [--report] | validate <collection.json> <artifact.json> [--report]",
       );
     const collection = await readJson(collectionPath);
     const input = await readJson(inputPath);
-    const snapshot =
+    const built =
       command === "build"
-        ? buildArtifact(collection, input)
-        : verifyArtifact(collection, input);
+        ? buildArtifactWithReport(collection, input)
+        : undefined;
+    const snapshot = built?.snapshot ?? verifyArtifact(collection, input);
     if (command === "build") {
       const { writeFile } = await import("node:fs/promises");
       await writeFile(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`, {
         flag: "wx",
       });
     }
-    console.log(
-      `Artifact ${command === "build" ? "built" : "valid"}: ${snapshot.files.length} files, ${snapshot.sections.length} ordered sections; full captured-change coverage`,
-    );
+    if (report) {
+      console.log(
+        JSON.stringify({
+          artifactPath: command === "build" ? outputPath : inputPath,
+          ...(built?.report ?? inspectionReport(snapshot)),
+        }),
+      );
+    } else {
+      console.log(
+        `Artifact ${command === "build" ? "built" : "valid"}: ${snapshot.files.length} files, ${snapshot.sections.length} ordered sections; full captured-change coverage`,
+      );
+    }
   } catch (error) {
     console.error(
       `Artifact failed: ${error instanceof Error ? error.message : String(error)}`,

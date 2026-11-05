@@ -36,11 +36,11 @@ The output path is optional; the default is `review-OWNER-REPO-NUMBER.json` in y
 The [skill instructions](skills/guided-review/SKILL.md) and [generation reference](skills/guided-review/references/generation.md) define the workflow. The helper takes the collector's JSON and a separate narrative JSON containing only `summary` and `sections`:
 
 ```sh
-bun run skills/guided-review/scripts/artifact.ts build collection.json narrative.json review.json
+bun run skills/guided-review/scripts/artifact.ts build collection.json narrative.json review.json --report
 bun run skills/guided-review/scripts/artifact.ts validate collection.json review.json
 ```
 
-Building preserves collected metadata and diff text, rejects invalid references, and adds uncovered changes to `Ungrouped changes`. Validation compares the finished artifact with the original collection and checks every reference and captured change. Both commands work offline. They exit nonzero with actionable errors for malformed inputs, changed source data, or invalid references; building refuses to overwrite an existing output. Use a new output path for a revision. Section priority and narrative accuracy still require human/model inspection; validation establishes structural validity and coverage.
+Building preserves collected metadata and diff text, rejects invalid references, and adds uncovered changes to `Ungrouped changes`. Validation compares the finished artifact with the original collection and checks every reference and captured change. Both commands work offline. They exit nonzero with actionable errors for malformed inputs, changed source data, or invalid references; building refuses to overwrite an existing output. Use a new output path for a revision. Section priority and narrative accuracy still require human/model inspection; validation establishes structural validity and coverage. Add trailing `--report` to either command for a JSON inspection report instead of the default one-line success message. The report includes the final narrative, references, file identities and binary/unavailable limits, captured commit IDs, and validation results, without repeating diff text. Build reports also identify exact references automatically added to `Ungrouped changes`. The skill inspects this report against the collection already read, reopening specific hunks when needed. A successful build already validates the artifact; standalone validation is needed after subsequent artifact edits. The version 1 artifact and offline viewing are unchanged.
 
 A generated example for `cli/cli#1` is in [skills/guided-review/fixtures/cli-pr-1.json](skills/guided-review/fixtures/cli-pr-1.json), with selection/action behavior ordered before command wiring and both parts of the file covered.
 
