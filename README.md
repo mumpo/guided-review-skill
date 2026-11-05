@@ -54,7 +54,7 @@ bun run dev:tui path/to/review.json
 
 Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cli-pr-1.json`. Paths are relative to your current directory; absolute paths also work. Viewing works offline, without `gh`, authentication, or a PR checkout.
 
-The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation, optional text diagram, and referenced real diff with file paths, change status, and old/new line numbers. Markdown and diagrams are displayed as plain source text.
+The viewer opens on the PR summary, including captured commit IDs, the description, and an ordered section list. Each section shows its explanation and referenced real diff with file paths, change status, and old/new line numbers. Optional fenced Mermaid diagrams appear within section explanations. General Markdown is displayed as source; Mermaid can render as graphics with the optional local setup below.
 
 Line references show only selected changes, with original hunk headers and explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Renames show both paths, while binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
 
@@ -69,6 +69,23 @@ Line references show only selected changes, with original hunk headers and expli
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
 Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
+
+### Mermaid diagrams
+
+The generation agent may include top-level fenced `mermaid` blocks inside a section's `explanation`, alongside the relevant prose. Multiple diagrams retain their narrative order. Mermaid in summaries, PR descriptions, other code fences, blockquotes, and indented code remains literal text. An unclosed fence also remains text. Existing separate `diagram` fields are ignored; no migration or artifact rewrite is performed.
+
+Graphics require a terminal reporting Kitty graphics support and pixel dimensions, plus an optional local [Mermaid CLI](https://github.com/mermaid-js/mermaid-cli) installation with Node.js, Puppeteer, and its headless-shell browser. The normal workspace installation does not include these dependencies. For example, install them separately before viewing:
+
+```sh
+npm install --global @mermaid-js/mermaid-cli@11.17.0 puppeteer
+npx --yes --package puppeteer puppeteer browsers install chrome-headless-shell
+```
+
+Ensure `mmdc` and `node` are on `PATH`. Viewing never installs packages or downloads a browser. A missing installation, browser failure, invalid diagram, unsupported terminal, missing pixel dimensions, or rendering limit leaves readable fenced source with a short reason. Source remains visible while rendering. General narrative and diff navigation continue to work during rendering.
+
+The renderer uses local packaged assets with external requests and arbitrary local file requests blocked. It disables HTML labels and rejects Mermaid configuration directives and frontmatter. Source is limited to 32,768 UTF-16 code units and 200 edges; each render has a 15-second deadline, a 4 MiB PNG limit, and a 4,096-pixel limit per dimension. Results use the active light/dark theme, fit the available width, scroll inside the body, and are released on navigation or exit. Resizing rerenders after a short debounce; the session caches up to four PNGs (at most 16 MiB). No images are embedded in or written back to artifacts.
+
+The optional browser integration check is `GUIDED_REVIEW_MERMAID_INTEGRATION=1 bun test apps/tui/src/mermaid.integration.test.ts`. It exercises flowchart and sequence fixtures in both themes, malformed diagrams, and cancellation. The normal test suite skips this check and uses synthetic images for terminal lifecycle tests.
 
 ### Diff layouts
 
@@ -134,7 +151,7 @@ A review artifact is a UTF-8 JSON document. The complete example is in [packages
 
 - `version`: the number `1`. Other versions are rejected.
 - `pullRequest`: URL, owner, repository, positive PR number, title, description, author, and the captured `baseCommit` and `headCommit` IDs.
-- `summary`: Markdown overview; `sections` is an ordered array of titles, Markdown explanations, optional text `diagram`s, and references.
+- `summary`: Markdown overview; `sections` is an ordered array of titles, Markdown explanations (optionally containing fenced Mermaid diagrams), and references. The former separate `diagram` field is ignored as unknown data; older artifacts still load, but those separate diagrams are no longer displayed.
 - `files`: the captured changes, each with a unique artifact-local `id`, `oldPath`, `newPath`, status (`added`, `modified`, `deleted`, or `renamed`), and `diff`. An added file has a null old path, a deleted file has a null new path, and modified or renamed files have both paths.
 - `diff` is `{ "kind": "text", "unified": "..." }` for captured unified diff text, `{ "kind": "binary" }` for binary content, or `{ "kind": "unavailable", "reason": "..." }` when the diff could not be obtained. Text is preserved as supplied; producers must retain all available changes.
 - References use the file's `id`. A `{ "kind": "lines", "fileId": "...", "side": "old" | "new", "startLine": 1, "endLine": 2 }` reference selects an inclusive, one-based range on that side of the diff. A `{ "kind": "file", "fileId": "..." }` reference identifies a whole file, including a binary or unavailable diff. Sections may reference several files, and a file may appear in several sections.

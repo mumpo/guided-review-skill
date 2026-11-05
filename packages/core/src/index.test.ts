@@ -14,6 +14,13 @@ const invalidText = await Bun.file(
 const fixture = () => JSON.parse(validText);
 
 describe("snapshot contract", () => {
+  test("explanation fences are ordinary Markdown and legacy diagrams are retained as unknown data", () => {
+    const value = fixture();
+    value.sections[0].explanation += "\n\n```mermaid\nflowchart LR\nA-->B\n```";
+    value.sections[0].diagram = { ignoredLegacyValue: true };
+    expect(validateSnapshot(value)).toBe(value);
+    expect(parseSnapshot(JSON.stringify(value))).toEqual(value);
+  });
   test("valid fixture survives a JSON round trip", () => {
     const snapshot = parseSnapshot(validText);
     expect(parseSnapshot(JSON.stringify(snapshot))).toEqual(snapshot);

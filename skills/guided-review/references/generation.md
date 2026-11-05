@@ -8,8 +8,7 @@ Write a JSON object with exactly `summary` and `sections`. The builder supplies 
   "sections": [
     {
       "title": "Select a PR and dispatch its action",
-      "explanation": "Explain the behavior, why these changes belong together, and any review questions grounded in the diff.",
-      "diagram": "PR data -> selection -> action",
+      "explanation": "Explain the behavior, why these changes belong together, and any review questions grounded in the diff.\n\n```mermaid\nflowchart LR\n  PR[PR data] --> Selection --> Action\n```",
       "references": [
         { "kind": "lines", "fileId": "file-1", "side": "new", "startLine": 203, "endLine": 280 }
       ]
@@ -18,7 +17,7 @@ Write a JSON object with exactly `summary` and `sections`. The builder supplies 
 }
 ```
 
-`summary` and each section's `explanation` must be nonempty Markdown. Titles must be nonempty, and each section must reference actual changes. `diagram` is optional plain text, not an image or a required Mermaid renderer. The section array is the review order; there is no separate priority field. Choose the order using behavior, potential correctness/security/data risks, and dependencies, rather than alphabetical filenames or raw diff order. Be specific about changed behavior and useful review questions, without claiming tests were run or code outside the snapshot was inspected.
+`summary` and each section's `explanation` must be nonempty Markdown. Titles must be nonempty, and each section must reference actual changes. Include an optional fenced `mermaid` block inside `explanation` only when a diagram makes the captured behavior or architecture easier to understand. Place it next to the relevant prose; multiple top-level blocks are supported. Do not emit a separate `diagram` field. Use self-contained Mermaid without configuration directives, frontmatter, HTML, external assets, or links. Keep diagrams small and readable as source: the terminal viewer may display the fence verbatim when graphics or local rendering dependencies are unavailable. The section array is the review order; there is no separate priority field. Choose the order using behavior, potential correctness/security/data risks, and dependencies, rather than alphabetical filenames or raw diff order. Be specific about changed behavior and useful review questions, without claiming tests were run or code outside the snapshot was inspected.
 
 ## Reference rules
 
