@@ -319,7 +319,7 @@ test("syntax foregrounds follow live themes and layouts without changing source 
         if (previous) expect(frame).toBe(previous);
         previous = frame;
         const keywordColor =
-          theme.name === "github-light" ? "#d73a49" : "#f97583";
+          theme.name === "github-light" ? "#cf222e" : "#ff7b72";
         const lines = ui.captureSpans().lines;
         for (const [role, sign] of [
           ["deletion", "-"],

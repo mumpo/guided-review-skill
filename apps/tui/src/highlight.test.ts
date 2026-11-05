@@ -185,9 +185,12 @@ test("syntax colors remain readable on all diff backgrounds", () => {
       [theme.diff.addition.foreground, theme.diff.addition.background],
       [theme.diff.deletion.foreground, theme.diff.deletion.background],
     ]) {
-      expect(readableTokenColor(background, foreground, background)).toBe(
-        foreground,
-      );
+      expect(
+        contrastRatio(
+          readableTokenColor(background, foreground, background),
+          background,
+        ),
+      ).toBeGreaterThanOrEqual(4.5);
       expect(readableTokenColor(undefined, foreground, background)).toBe(
         foreground,
       );
@@ -199,6 +202,46 @@ test("syntax colors remain readable on all diff backgrounds", () => {
       ).toBeGreaterThanOrEqual(4.5);
     }
   }
+});
+
+test("low-contrast syntax keeps its hue and GitHub's current keyword red stays red", () => {
+  const light = themes["github-light"];
+  const dark = themes["github-dark"];
+  expect(
+    readableTokenColor(
+      "#cf222e",
+      light.diff.addition.foreground,
+      light.diff.addition.background,
+    ),
+  ).toBe("#cf222e");
+  const adjusted = readableTokenColor(
+    "#d73a49",
+    light.diff.addition.foreground,
+    light.diff.addition.background,
+  );
+  const rgb = (color: string) =>
+    [1, 3, 5].map((offset) =>
+      Number.parseInt(color.slice(offset, offset + 2), 16),
+    );
+  const [r, g, b] = rgb(adjusted);
+  expect(r).toBeGreaterThan(b);
+  expect(b).toBeGreaterThan(g);
+  expect(r).toBeLessThan(0xd7);
+  expect(
+    contrastRatio(adjusted, light.diff.addition.background),
+  ).toBeGreaterThanOrEqual(4.5);
+  const brightened = readableTokenColor(
+    "#800000",
+    dark.diff.addition.foreground,
+    dark.diff.deletion.background,
+  );
+  const [dr, dg, db] = rgb(brightened);
+  expect(dr).toBeGreaterThan(dg);
+  expect(dg).toBe(db);
+  expect(dr).toBeGreaterThan(0x80);
+  expect(
+    contrastRatio(brightened, dark.diff.deletion.background),
+  ).toBeGreaterThanOrEqual(4.5);
 });
 
 test("CRLF, no-newline markers and added/deleted paths preserve source without highlighting metadata", () => {

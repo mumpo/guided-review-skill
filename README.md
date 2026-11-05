@@ -89,7 +89,7 @@ Both diff layouts highlight code using bundled language grammars and the active 
 
 Highlighting works offline after dependencies are installed, without a checkout or language server. Old and new source are highlighted independently using their respective paths, including renames. Each selected fragment starts with fresh syntax state at hunk and omission boundaries, so highlighting of incomplete constructs is best effort. Omitted source is never fetched or reconstructed. Highlighting failures retain readable plain text.
 
-Syntax colors affect code foregrounds only. Addition/deletion backgrounds, signs, gutters, line numbers, and markers retain their diff styling. Token colors that lack sufficient contrast against a row's background use its normal readable foreground. Theme changes recolor the current diff without resetting navigation or scrolling; layout changes reuse the highlighted source.
+Syntax colors affect code foregrounds only. Addition/deletion backgrounds, signs, gutters, line numbers, and markers retain their diff styling. Token colors that lack sufficient contrast against a row's background are darkened on light backgrounds or lightened on dark backgrounds while retaining their hue. GitHub's current default syntax palettes provide the base colors, including `#cf222e` for light-theme keywords. Theme changes recolor the current diff without resetting navigation or scrolling; layout changes reuse the highlighted source.
 
 ### Terminal themes
 

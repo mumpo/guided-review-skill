@@ -17,8 +17,8 @@ import css from "shiki/langs/css.mjs";
 import shell from "shiki/langs/shellscript.mjs";
 import sql from "shiki/langs/sql.mjs";
 import markdown from "shiki/langs/markdown.mjs";
-import light from "shiki/themes/github-light.mjs";
-import dark from "shiki/themes/github-dark.mjs";
+import light from "shiki/themes/github-light-default.mjs";
+import dark from "shiki/themes/github-dark-default.mjs";
 import type { DiffLine } from "../../../packages/core/src";
 import type { FileRows } from "./diff";
 import type { ThemeName } from "./theme";
@@ -89,7 +89,10 @@ const tokenize: Tokenizer = (source, language, theme) => {
   if (!highlighter) {
     try {
       highlighter = createHighlighterCoreSync({
-        themes: [light, dark],
+        themes: [
+          { ...light, name: "github-light" },
+          { ...dark, name: "github-dark" },
+        ],
         langs: [
           javascript,
           typescript,
@@ -213,5 +216,32 @@ export function readableTokenColor(
   foreground: string,
   background: string,
 ): string {
-  return color && contrastRatio(color, background) >= 4.5 ? color : foreground;
+  if (!color) return foreground;
+  if (contrastRatio(color, background) >= 4.5) return color;
+
+  // Mixing toward black/white preserves RGB hue instead of adopting the diff's hue.
+  // Choose the endpoint with greater contrast, then find the smallest adjustment.
+  const endpoint =
+    contrastRatio("#000000", background) >= contrastRatio("#ffffff", background)
+      ? 0
+      : 255;
+  const channels = [1, 3, 5].map((offset) =>
+    Number.parseInt(color.slice(offset, offset + 2), 16),
+  );
+  const mix = (amount: number) =>
+    `#${channels
+      .map((channel) =>
+        Math.round(channel + (endpoint - channel) * amount)
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")}`;
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 16; step++) {
+    const middle = (low + high) / 2;
+    if (contrastRatio(mix(middle), background) >= 4.5) high = middle;
+    else low = middle;
+  }
+  return mix(high);
 }
