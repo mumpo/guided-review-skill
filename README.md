@@ -44,6 +44,27 @@ Building preserves collected metadata and diff text, rejects invalid references,
 
 A generated example for `cli/cli#1` is in [skills/guided-review/fixtures/cli-pr-1.json](skills/guided-review/fixtures/cli-pr-1.json), with selection/action behavior ordered before command wiring and both parts of the file covered.
 
+## One-time permission setup
+
+For Codex, preview and install narrow permissions for the installed collector and launcher helpers:
+
+```sh
+bun run skills/guided-review/scripts/setup-permissions.ts
+bun run skills/guided-review/scripts/setup-permissions.ts --install
+```
+
+Review the preview before installing, then restart Codex. Setup writes only `$CODEX_HOME/rules/guided-review.rules` (default `~/.codex/rules/guided-review.rules`), resolves the clone's real path, and preserves unrelated rules. It refuses to replace differing existing content. The rules approve those two helper prefixes outside the sandbox, including their repository dependencies and user-configured custom launcher. They do not grant blanket Bun, GitHub CLI, Herdr, or shell access. Moving the clone requires reviewing/replacing its dedicated rules file. Remove that file and restart Codex to revoke the grants.
+
+Claude Code uses the shared skill's `allowed-tools` declarations for those same two helpers, with its installed skill-directory substitution. No separate settings install is needed. These declarations do not override explicit ask/deny rules, managed restrictions, or OS sandbox/network/socket restrictions. OS automation permissions and artifact output outside writable locations can still require approval in either host. See [permission setup details](skills/guided-review/references/permissions.md).
+
+The collector now supports writing its output directly, without shell redirection:
+
+```sh
+bun run collect https://github.com/OWNER/REPO/pull/NUMBER --output collection.json
+```
+
+Omitting `--output` preserves JSON on stdout. Existing output files are never overwritten. Skill invocations use the stable `scripts/collect.ts` and `scripts/open.ts` helper paths directly so saved approvals can match; ordinary reviews never install additional permissions.
+
 ## Automatic viewer launch
 
 After generating and inspecting a valid artifact, the shared Codex/Claude Code skill calls the local launcher. It opens a user-facing terminal and returns control to the agent. Explicit requests to generate without opening skip this step. Host permissions still apply; the skill cannot bypass sandbox or operating-system approval requirements.
