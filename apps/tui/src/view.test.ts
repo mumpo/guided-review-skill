@@ -3,7 +3,7 @@ import { createTestRenderer, KeyCodes } from "@opentui/core/testing";
 import { analyzeDiffs } from "../../../packages/core/src";
 import { loadReview } from "./load";
 import { mountReview } from "./view";
-import { RGBA } from "@opentui/core";
+import { RGBA, type ScrollBoxRenderable } from "@opentui/core";
 import { themes } from "./theme";
 import { startTheme } from "./theme-session";
 
@@ -318,6 +318,98 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
   }
 });
 
+test("Vim motions scroll by line and half viewport and navigate bounded sections", async () => {
+  for (const theme of Object.values(themes)) {
+    for (const mode of ["inline", "side-by-side"] as const) {
+      const review = await loadReview(fixture);
+      review.snapshot.sections[0].explanation = Array.from(
+        { length: 80 },
+        (_, i) => `Narrative ${i + 1}: ${"wrapped words ".repeat(8)}`,
+      ).join("\n");
+
+      const ui = await createTestRenderer({ width: 100, height: 24 });
+
+      try {
+        const applyTheme = mountReview(ui.renderer, review, theme, mode);
+        const body = ui.renderer.root.findDescendantById(
+          "body",
+        ) as ScrollBoxRenderable;
+        const press = async (...keys: string[]) => {
+          await ui.mockInput.pressKeys(keys);
+          await ui.renderOnce();
+        };
+
+        await press("h");
+
+        expect(ui.captureCharFrame()).toContain("#42 · Summary");
+
+        await press("l");
+
+        expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
+
+        await press("j");
+
+        expect(body.scrollTop).toBe(1);
+
+        await press("k");
+
+        expect(body.scrollTop).toBe(0);
+
+        await press("\u0004"); // Ctrl+d
+
+        expect(body.scrollTop).toBe(Math.floor(body.viewport.height / 2));
+        expect(ui.captureCharFrame()).toContain(`d: diff ${mode}`);
+
+        await press("\u0015"); // Ctrl+u
+
+        expect(body.scrollTop).toBe(0);
+
+        ui.resize(55, 18);
+        await ui.renderOnce();
+        await press("\u0004");
+
+        const halfPage = Math.floor(body.viewport.height / 2);
+
+        expect(body.scrollTop).toBe(halfPage);
+
+        applyTheme(themes["github-light"]);
+        await ui.renderOnce();
+
+        expect(body.scrollTop).toBe(halfPage);
+
+        await press("\u0015", "\u0015");
+
+        expect(body.scrollTop).toBe(0);
+
+        await press(...Array(100).fill("\u0004"));
+
+        const bottom = body.scrollTop;
+
+        expect(bottom).toBeGreaterThan(halfPage);
+
+        await press("\u0004");
+
+        expect(body.scrollTop).toBe(bottom);
+
+        await press("l", "h");
+
+        expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
+        expect(body.scrollTop).toBe(0);
+
+        await press("h");
+
+        expect(ui.captureCharFrame()).toContain("#42 · Summary");
+
+        await press("l", "l", "l", "l");
+
+        expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
+      } finally {
+        await ui.dispose();
+      }
+    }
+  }
+});
+
 test("an artifact without sections stays on summary and Ctrl+C closes cleanly", async () => {
   const review = await loadReview(fixture);
   review.snapshot.sections = [];
@@ -326,7 +418,7 @@ test("an artifact without sections stays on summary and Ctrl+C closes cleanly", 
 
   try {
     mountReview(ui.renderer, review);
-    await ui.mockInput.pressKeys(["n", KeyCodes.END, "p"]);
+    await ui.mockInput.pressKeys(["n", KeyCodes.END, "p", "h", "l"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("#42 · Summary");

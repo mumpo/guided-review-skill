@@ -90,8 +90,7 @@ export function mountReview(
 
   const help = new TextRenderable(renderer, {
     id: "help",
-    content:
-      "n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | q/Ctrl+C: quit",
+    content: "",
     wrapMode: "word",
     flexShrink: 0,
   });
@@ -135,7 +134,7 @@ export function mountReview(
   applyTheme(theme);
 
   function updateHelp() {
-    help.content = `n/p ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | c: collapse file | d: diff ${diffMode} | q/Ctrl+C: quit`;
+    help.content = `n/p h/l ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | Ctrl+u/d: half page | c: collapse file | d: diff ${diffMode} | q/Ctrl+C: quit`;
   }
 
   updateHelp();
@@ -208,7 +207,18 @@ export function mountReview(
       renderer.destroy();
       return;
     }
-    if (key.ctrl || key.meta || key.option) return;
+    if (key.meta || key.option) return;
+
+    if (key.ctrl) {
+      if (key.name === "u" || key.name === "d") {
+        const distance = Math.max(1, Math.floor(body.viewport.height / 2));
+
+        body.scrollBy(key.name === "u" ? -distance : distance);
+        key.preventDefault();
+      }
+
+      return;
+    }
 
     let nextPage = page;
 
@@ -224,10 +234,12 @@ export function mountReview(
         break;
       }
       case "n":
+      case "l":
       case "right":
         nextPage++;
         break;
       case "p":
+      case "h":
       case "left":
         nextPage--;
         break;
