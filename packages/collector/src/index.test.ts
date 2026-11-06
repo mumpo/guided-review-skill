@@ -7,8 +7,12 @@ const metadata = {
   title: "A PR",
   body: null,
   user: { login: "author" },
-  base: { sha: "base" },
-  head: { sha: "head" },
+  base: { sha: "base", ref: "main" },
+  head: { sha: "head", ref: "feature" },
+  state: "open",
+  draft: false,
+  merged: false,
+  commits: 2,
   changed_files: 3,
 };
 
@@ -53,6 +57,35 @@ function runner(
 }
 
 describe("collectPullRequest", () => {
+  test("captures all states with merged and closed taking precedence over draft", async () => {
+    for (const [changes, status] of [
+      [{ draft: true }, "draft"],
+      [{ state: "closed", draft: true }, "closed"],
+      [{ state: "closed", draft: true, merged: true }, "merged"],
+    ] as const) {
+      const first = { ...metadata, ...changes };
+      const result = await collectPullRequest(url, runner({ first }));
+
+      expect(result.pullRequest.status).toBe(status);
+    }
+  });
+
+  test("rejects malformed captured header metadata", async () => {
+    for (const [changes, field] of [
+      [{ state: "unknown" }, "state"],
+      [{ draft: null }, "draft"],
+      [{ merged: "false" }, "merged"],
+      [{ commits: -1 }, "commits"],
+      [{ commits: 1.5 }, "commits"],
+      [{ base: { ...metadata.base, ref: "" } }, "base.ref"],
+      [{ head: { ...metadata.head, ref: null } }, "head.ref"],
+    ] as const) {
+      await expect(
+        collectPullRequest(url, runner({ first: { ...metadata, ...changes } })),
+      ).rejects.toThrow(field);
+    }
+  });
+
   test("collects metadata, text, rename, and binary without losing text", async () => {
     const result = await collectPullRequest(url, runner());
 
@@ -61,6 +94,10 @@ describe("collectPullRequest", () => {
       description: "",
       baseCommit: "base",
       headCommit: "head",
+      status: "open",
+      commitCount: 2,
+      baseRefName: "main",
+      headRefName: "feature",
     });
     expect(result.files.map((file) => file.status)).toEqual([
       "added",

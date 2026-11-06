@@ -16,6 +16,36 @@ const invalidText = await Bun.file(
 const fixture = () => JSON.parse(validText);
 
 describe("snapshot contract", () => {
+  test("optional PR header metadata round trips and invalid values report their fields", () => {
+    const value = fixture();
+    Object.assign(value.pullRequest, {
+      status: "merged",
+      commitCount: 0,
+      baseRefName: "main",
+      headRefName: "feature/header",
+    });
+
+    expect(parseSnapshot(JSON.stringify(value))).toEqual(value);
+
+    for (const [field, invalid] of [
+      ["status", "unknown"],
+      ["status", null],
+      ["commitCount", -1],
+      ["commitCount", 1.5],
+      ["commitCount", "2"],
+      ["commitCount", Number.MAX_SAFE_INTEGER + 1],
+      ["baseRefName", ""],
+      ["headRefName", null],
+    ] as const) {
+      const malformed = structuredClone(value);
+      malformed.pullRequest[field] = invalid;
+
+      expect(() => validateSnapshot(malformed)).toThrow(
+        `$.pullRequest.${field}`,
+      );
+    }
+  });
+
   test("explanation fences are ordinary Markdown and legacy diagrams are retained as unknown data", () => {
     const value = fixture();
     value.sections[0].explanation += "\n\n```mermaid\nflowchart LR\nA-->B\n```";

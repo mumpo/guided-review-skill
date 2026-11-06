@@ -43,21 +43,14 @@ test("startup discovers distinct path and eligible narrative languages using sel
   );
 
   expect([...sources.keys()].sort()).toEqual(
-    [
-      "rust",
-      "shellscript",
-      "yaml",
-      "typescript",
-      "python",
-      "markdown",
-      "json",
-    ].sort(),
+    ["shellscript", "yaml", "typescript", "python", "markdown", "json"].sort(),
   );
   expect(sources.get("typescript")).toBe("hello");
   expect(sources.get("python")).toBe("Old guide");
   expect(sources.get("markdown")).toBe("New guide");
   expect(sources.get("shellscript")).toBe("echo hello");
   expect(sources.get("json")).toBe("");
+  expect(sources.has("rust")).toBe(false);
   expect(samples.some(({ source }) => source.includes("goodbye"))).toBe(false);
 });
 

@@ -154,6 +154,14 @@ export async function collectPullRequest(
   if (typeof description !== "string")
     throw new Error("body: expected a string or null");
 
+  if (first.state !== "open" && first.state !== "closed")
+    throw new Error("state: expected open or closed");
+
+  for (const key of ["draft", "merged"]) {
+    if (typeof first[key] !== "boolean")
+      throw new Error(`${key}: expected a boolean`);
+  }
+
   const pullRequest: CollectedPullRequest["pullRequest"] = {
     url: `https://github.com/${owner}/${repository}/pull/${number}`,
     owner,
@@ -164,6 +172,16 @@ export async function collectPullRequest(
     author: str(object(first.user, "user").login, "user.login"),
     baseCommit,
     headCommit,
+    status: first.merged
+      ? "merged"
+      : first.state === "closed"
+        ? "closed"
+        : first.draft
+          ? "draft"
+          : "open",
+    commitCount: count(first.commits, "commits"),
+    baseRefName: str(object(first.base, "base").ref, "base.ref"),
+    headRefName: str(object(first.head, "head").ref, "head.ref"),
   };
 
   const entries: Obj[] = [];

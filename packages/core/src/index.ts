@@ -11,6 +11,10 @@ export interface ReviewSnapshot {
     author: string;
     baseCommit: string;
     headCommit: string;
+    status?: "draft" | "open" | "merged" | "closed";
+    commitCount?: number;
+    baseRefName?: string;
+    headRefName?: string;
   };
   summary: string;
   files: DiffFile[];
@@ -128,6 +132,26 @@ export function validateSnapshot(value: unknown): ReviewSnapshot {
 
   string(pr.description, "$.pullRequest.description");
   positiveInteger(pr.number, "$.pullRequest.number");
+
+  if (pr.status !== undefined)
+    choice(
+      pr.status,
+      ["draft", "open", "merged", "closed"],
+      "$.pullRequest.status",
+    );
+
+  if (
+    pr.commitCount !== undefined &&
+    (typeof pr.commitCount !== "number" ||
+      !Number.isSafeInteger(pr.commitCount) ||
+      pr.commitCount < 0)
+  )
+    fail("$.pullRequest.commitCount", "expected a non-negative safe integer");
+
+  for (const key of ["baseRefName", "headRefName"]) {
+    if (pr[key] !== undefined) string(pr[key], `$.pullRequest.${key}`, true);
+  }
+
   string(root.summary, "$.summary");
 
   const ids = new Set<string>();

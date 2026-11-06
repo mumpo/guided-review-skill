@@ -3,14 +3,106 @@ import { createTestRenderer, KeyCodes } from "@opentui/core/testing";
 import { analyzeDiffs } from "../../../packages/core/src";
 import { loadReview } from "./load";
 import { mountReview } from "./view";
-import { RGBA, type ScrollBoxRenderable } from "@opentui/core";
+import {
+  type BoxRenderable,
+  RGBA,
+  type ScrollBoxRenderable,
+} from "@opentui/core";
 import { themes } from "./theme";
 import { startTheme } from "./theme-session";
+import { sessionHighlights } from "./highlight-service";
 
 const fixture = new URL(
   "../../../packages/core/fixtures/valid.json",
   import.meta.url,
 ).pathname;
+
+test("summary separates metadata from the unlabeled description in both themes and layouts", async () => {
+  for (const theme of Object.values(themes)) {
+    for (const mode of ["inline", "side-by-side"] as const) {
+      const review = await loadReview(fixture);
+      review.snapshot.summary = "This generated summary must stay hidden.";
+      review.snapshot.pullRequest.description = `Description starts here\n\n${"Scrollable description\n".repeat(60)}`;
+
+      const ui = await createTestRenderer({ width: 100, height: 45 });
+
+      try {
+        const applyTheme = mountReview(ui.renderer, review, theme, mode);
+        await sessionHighlights(ui.renderer).settled();
+        await ui.renderOnce();
+
+        const frame = ui.captureCharFrame();
+        const separator = ui.renderer.root.findDescendantById(
+          "description-separator",
+        ) as BoxRenderable;
+        const body = ui.renderer.root.findDescendantById(
+          "body",
+        ) as ScrollBoxRenderable;
+        const wideWidth = separator.width;
+        const line = frame.split("\n").find((row) => row.includes("─"));
+
+        expect(frame).not.toContain(review.snapshot.summary);
+        expect(frame).not.toContain("PR description");
+        expect(line?.match(/─+/)?.[0]).toBe("─".repeat(wideWidth));
+        expect(
+          frame.indexOf(review.snapshot.pullRequest.headCommit),
+        ).toBeLessThan(frame.indexOf("─"));
+        expect(frame.indexOf("─")).toBeLessThan(
+          frame.indexOf("Description starts here"),
+        );
+        expect(separator.borderColor.equals(RGBA.fromHex(theme.muted))).toBe(
+          true,
+        );
+
+        await ui.mockInput.pressKeys(["j"]);
+        await ui.renderOnce();
+
+        const scrollTop = body.scrollTop;
+        const nextTheme =
+          themes[
+            theme.name === "github-light" ? "github-dark" : "github-light"
+          ];
+        applyTheme(nextTheme);
+        await ui.renderOnce();
+
+        expect(scrollTop).toBeGreaterThan(0);
+        expect(body.scrollTop).toBe(scrollTop);
+        expect(
+          ui.renderer.root.findDescendantById("description-separator"),
+        ).toBe(separator);
+        expect(
+          separator.borderColor.equals(RGBA.fromHex(nextTheme.muted)),
+        ).toBe(true);
+
+        ui.resize(45, 45);
+        await ui.renderOnce();
+
+        expect(separator.width).toBeLessThan(wideWidth);
+        expect(separator.width).toBeGreaterThan(0);
+
+        review.snapshot.pullRequest.description = "";
+        await ui.mockInput.pressKeys(["n"]);
+        await ui.renderOnce();
+
+        expect(
+          ui.renderer.root.findDescendantById("description-separator"),
+        ).toBeUndefined();
+
+        await ui.mockInput.pressKeys(["s"]);
+        await ui.renderOnce();
+
+        expect(ui.captureCharFrame()).toContain("(No description)");
+        expect(ui.captureCharFrame()).not.toContain("(No summary)");
+        expect(
+          ui.renderer.root.findDescendantById("description-separator"),
+        ).toBeDefined();
+      } finally {
+        await sessionHighlights(ui.renderer).settled();
+        await ui.dispose();
+      }
+    }
+  }
+});
 
 test("both themes paint explicit readable colors without changing displayed content", async () => {
   const review = await loadReview(fixture);
@@ -134,7 +226,9 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(frame).toContain("example/project #42 · Summary");
     expect(frame).toContain("Update the greeting");
     expect(frame).toContain(review.snapshot.pullRequest.baseCommit);
-    expect(frame).toContain(review.snapshot.summary);
+    expect(frame).not.toContain(review.snapshot.summary);
+    expect(frame).toContain(review.snapshot.pullRequest.description);
+    expect(frame).not.toContain("PR description");
     expect(frame).toContain("1. Greeting");
     expect(frame).toContain("2. Farewell");
     expect(frame).toContain("3. Other files");
