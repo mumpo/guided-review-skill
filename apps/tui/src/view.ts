@@ -13,6 +13,7 @@ import { MarkdownView } from "./markdown-view";
 import { sessionHighlights } from "./highlight-service";
 import { reviewSyntaxSamples } from "./highlight-preload";
 import { type Theme, themes } from "./theme";
+import { PullRequestHeader } from "./pr-header";
 
 /** A summary followed by the artifact's sections, in their original order. */
 export function mountReview(
@@ -58,6 +59,7 @@ export function mountReview(
   });
   let narrativeText: TextRenderable[] = [];
   let narrativeMarkdown: MarkdownView[] = [];
+  let prHeader: PullRequestHeader | undefined;
 
   function plain(content: string) {
     const node = new TextRenderable(renderer, {
@@ -117,6 +119,8 @@ export function mountReview(
 
     for (const node of narrativeMarkdown) node.setTheme(theme);
 
+    prHeader?.setTheme(theme);
+
     explanation.setTheme(theme);
     changes.setTheme(theme);
     help.fg = theme.muted;
@@ -149,6 +153,7 @@ export function mountReview(
 
     narrativeText = [];
     narrativeMarkdown = [];
+    prHeader = undefined;
 
     if (page === 0) {
       changes.setFiles([], diffMode);
@@ -161,10 +166,12 @@ export function mountReview(
             `${file.newPath ?? file.oldPath}: ${file.diff.kind === "unavailable" ? `unavailable (${file.diff.reason})` : "binary"}`,
         );
 
+      prHeader = new PullRequestHeader(renderer, pr, theme);
+      narrative.add(prHeader);
+
       plain(
         [
-          pr.title,
-          `${pr.url}\nAuthor: ${pr.author}\nBase: ${pr.baseCommit}\nHead: ${pr.headCommit}`,
+          `${pr.url}\nBase: ${pr.baseCommit}\nHead: ${pr.headCommit}`,
           `${snapshot.files.length} files · ${snapshot.sections.length} sections`,
           ...(analysis.uncovered.length > 0
             ? [

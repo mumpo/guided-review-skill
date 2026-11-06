@@ -9,6 +9,15 @@ export interface Theme {
   surface: string;
   text: string;
   muted: string;
+  pullRequest: {
+    number: string;
+    badgeForeground: string;
+    draft: string;
+    open: string;
+    merged: string;
+    closed: string;
+    branch: { foreground: string; background: string };
+  };
   navigation: { foreground: string; background: string };
   scrollbar: { foreground: string; background: string };
   diff: {
@@ -51,6 +60,15 @@ export const themes: Record<ThemeName, Theme> = {
     surface: "#f6f8fa",
     text: "#1f2328",
     muted: "#59636e",
+    pullRequest: {
+      number: "#59636e",
+      badgeForeground: "#ffffff",
+      draft: "#59636e",
+      open: "#1f883d",
+      merged: "#8250df",
+      closed: "#cf222e",
+      branch: { foreground: "#0969da", background: "#ddf4ff" },
+    },
     navigation: { foreground: "#0969da", background: "#f6f8fa" },
     scrollbar: { foreground: "#59636e", background: "#f6f8fa" },
     diff: {
@@ -95,6 +113,16 @@ export const themes: Record<ThemeName, Theme> = {
     surface: "#161b22",
     text: "#e6edf3",
     muted: "#9198a1",
+    pullRequest: {
+      number: "#59636e",
+      badgeForeground: "#ffffff",
+      draft: "#656c76",
+      open: "#238636",
+      merged: "#8957e5",
+      closed: "#da3633",
+      // Primer accent-muted (#388bfd1a) flattened over #0d1117.
+      branch: { foreground: "#4493f8", background: "#111d2e" },
+    },
     navigation: { foreground: "#79c0ff", background: "#161b22" },
     scrollbar: { foreground: "#9198a1", background: "#161b22" },
     diff: {

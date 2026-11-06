@@ -28,6 +28,28 @@ const narrative = {
 };
 
 describe("artifact generation", () => {
+  test("preserves captured PR header metadata and rejects metadata tampering", () => {
+    const source = structuredClone(collection);
+    Object.assign(source.pullRequest, {
+      status: "open",
+      commitCount: 2,
+      baseRefName: "main",
+      headRefName: "feature/header",
+    });
+
+    const result = buildArtifact(source, narrative);
+    const written = JSON.parse(JSON.stringify(result));
+
+    expect(written.pullRequest).toEqual(source.pullRequest);
+    expect(verifyArtifact(source, written)).toEqual(result);
+
+    written.pullRequest.commitCount = 3;
+
+    expect(() => verifyArtifact(source, written)).toThrow(
+      "metadata or files differ",
+    );
+  });
+
   test("report preserves the final narrative and inspection limits without captured diff text", () => {
     const { snapshot, report } = buildArtifactWithReport(collection, narrative);
 
