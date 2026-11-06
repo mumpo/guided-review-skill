@@ -16,6 +16,8 @@ import { reviewSyntaxSamples } from "./highlight-preload";
 import { type Theme, themes } from "./theme";
 import { PullRequestHeader } from "./pr-header";
 import { githubCommentPublisher, type PublishComment } from "./comments";
+import { CursorText } from "./cursor-text";
+import { PageCursor } from "./page-cursor";
 
 /** A summary followed by the artifact's sections, in their original order. */
 export function mountReview(
@@ -67,7 +69,7 @@ export function mountReview(
   let descriptionSeparator: BoxRenderable | undefined;
 
   function plain(content: string) {
-    const node = new TextRenderable(renderer, {
+    const node = new CursorText(renderer, {
       content,
       width: "100%",
       wrapMode: "word",
@@ -102,6 +104,7 @@ export function mountReview(
     publish ?? githubCommentPublisher(pr, undefined, commentController.signal),
   );
   body.add(changes);
+  const cursor = new PageCursor(body, [narrative, explanation], changes);
 
   const help = new TextRenderable(renderer, {
     id: "help",
@@ -234,6 +237,7 @@ export function mountReview(
     }
 
     body.scrollTo(0);
+    cursor.reset();
   }
 
   function onKey(key: KeyEvent) {
@@ -296,15 +300,13 @@ export function mountReview(
         nextPage = snapshot.sections.length;
         break;
       case "j":
-        if (page === 0) body.scrollBy(1);
-        else changes.moveCursor(1);
+        cursor.move(1);
         break;
       case "down":
         body.scrollBy(1);
         break;
       case "k":
-        if (page === 0) body.scrollBy(-1);
-        else changes.moveCursor(-1);
+        cursor.move(-1);
         break;
       case "up":
         body.scrollBy(-1);
@@ -340,12 +342,15 @@ export function mountReview(
 
   renderer.on("capabilities", onCapabilities);
   renderer.on("resize", onResize);
+  const onFrame = () => cursor.refresh();
+  renderer.on("frame", onFrame);
   renderer.once("destroy", () => {
     commentController.abort();
     renderer.keyInput.off("keypress", onKey);
     renderer.keyInput.off("paste", onPaste);
     renderer.off("resize", onResize);
     renderer.off("capabilities", onCapabilities);
+    renderer.off("frame", onFrame);
   });
   showPage();
   sessionHighlights(renderer).preload(reviewSyntaxSamples(review));

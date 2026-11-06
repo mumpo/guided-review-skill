@@ -84,6 +84,7 @@ export class DiffView extends BoxRenderable {
   private cursorRows: CursorRow[] = [];
   private selected?: CommentTarget;
   private preferredSide: "old" | "new" = "new";
+  private cursorActive = true;
   private active?: CommentTarget;
   private editor?: TextareaRenderable;
   private drafts = new Map<string, Draft>();
@@ -186,7 +187,7 @@ export class DiffView extends BoxRenderable {
   }
 
   openComment() {
-    if (!this.selected) return;
+    if (!this.cursorActive || !this.selected) return;
 
     this.active = { ...this.selected };
     const key = commentKey(this.active);
@@ -230,12 +231,44 @@ export class DiffView extends BoxRenderable {
     if (!this.isDestroyed) this.preserve(() => this.rebuild());
   }
 
-  moveCursor(direction: number) {
+  get hasCursor() {
+    return (
+      this.cursorActive &&
+      this.cursorRows.some(
+        (row) =>
+          !this.collapsed.has(row.file) &&
+          row.targets.some((target) => this.isSelected(target)),
+      )
+    );
+  }
+
+  setCursorActive(active: boolean) {
+    if (this.cursorActive === active) return;
+
+    this.cursorActive = active;
+    this.setTheme(this.palette);
+  }
+
+  focusCursor() {
+    const row = this.cursorRows.find((row) => !this.collapsed.has(row.file));
+    if (!row) return false;
+
+    this.selected =
+      row.targets.find((target) => target.side === this.preferredSide) ??
+      row.targets[0];
+    this.cursorActive = true;
+    this.setTheme(this.palette);
+    this.revealCursor();
+
+    return true;
+  }
+
+  moveCursor(direction: number): boolean {
     const rows = this.cursorRows.filter((row) => !this.collapsed.has(row.file));
     if (!rows.length) {
       this.selected = undefined;
       this.setTheme(this.palette);
-      return;
+      return false;
     }
 
     const current = rows.findIndex((row) =>
@@ -245,15 +278,23 @@ export class DiffView extends BoxRenderable {
       current < 0
         ? 0
         : Math.max(0, Math.min(rows.length - 1, current + direction));
+    if (index === current) {
+      this.revealCursor();
+      return false;
+    }
     this.selected =
       rows[index].targets.find(
         (target) => target.side === this.preferredSide,
       ) ?? rows[index].targets[0];
     this.setTheme(this.palette);
     this.revealCursor();
+
+    return true;
   }
 
   switchSide() {
+    if (!this.cursorActive) return;
+
     const row = this.cursorRows.find((row) =>
       row.targets.some((target) => this.isSelected(target)),
     );
@@ -272,8 +313,9 @@ export class DiffView extends BoxRenderable {
   }
 
   private revealCursor() {
+    const signal = this.controller.signal;
     this.body.afterLayout(() => {
-      if (this.isDestroyed) return;
+      if (signal.aborted || this.isDestroyed || !this.cursorActive) return;
 
       const row = this.cursorRows.find((row) =>
         row.targets.some((target) => this.isSelected(target)),
@@ -375,7 +417,11 @@ export class DiffView extends BoxRenderable {
 
     header.content.visible = !this.collapsed.has(id);
     header.chevron.content = header.content.visible ? "⌄" : "›";
-    if (this.selected?.fileId === id && this.collapsed.has(id))
+    if (
+      this.cursorActive &&
+      this.selected?.fileId === id &&
+      this.collapsed.has(id)
+    )
       this.moveCursor(1);
   }
 
@@ -784,6 +830,7 @@ export class DiffView extends BoxRenderable {
 
     for (const { node, cell, file } of this.painted) {
       const selected =
+        this.cursorActive &&
         this.selected &&
         cell.line &&
         cell.side === this.selected.side &&

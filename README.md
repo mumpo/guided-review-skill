@@ -152,7 +152,7 @@ Line references show only selected changes, with explicit omission markers; whol
 | `p`, `h`, `←`, `Shift+Tab` | Previous section (from the first, return to summary). |
 | `s`, `Home` | Return to summary. |
 | `End` | Open the last section. |
-| `j`/`k` | Move the highlighted diff cursor down/up, scrolling it into view. On the summary, scroll by one line. |
+| `j`/`k` | Move the highlighted cursor down/up through narrative lines and diff rows, scrolling it into view. |
 | `Space` | Switch old/new sides on a paired side-by-side row. |
 | `↑`/`↓`, `PageUp`/`PageDown` | Scroll the current page. |
 | `Ctrl+u`/`Ctrl+d` | Scroll up/down half the current viewport height. |
@@ -167,7 +167,9 @@ Missing or malformed files, unsupported versions, malformed diffs, and invalid c
 
 ### Line comments
 
-The cursor marks the selected source cell with `▸` in its gutter and underlines its wrapped source text. It skips headers, omission markers, and collapsed files. In side-by-side mode, it initially selects the right cell when available; Space switches sides, and vertical movement prefers that side. Inline deletions target old lines; additions and context target new lines.
+The cursor starts on the first narrative line of each page. `j`/`k` move through the section title, rendered Markdown lines, and captured diff rows in order, including back from the first diff row to the explanation. Summary metadata, description, and section-list text use the same navigation. Selected narrative text is underlined while retaining its Markdown styles and code colors. Wrapped continuations belong to the same logical line, matching wrapped diff rows. Blank spacers, list markers, diff headers, omission markers, rendered diagram images, and collapsed files are skipped; Mermaid source fallbacks remain navigable text.
+
+On a source cell the cursor adds `▸` in its gutter and underlines its wrapped text. In side-by-side mode, entering the diff prefers the right cell when available; Space switches sides, and vertical movement prefers that side. Inline deletions target old lines; additions and context target new lines. `c` and Space act only while a diff source row is selected; selecting Markdown does not create a GitHub comment target.
 
 Press `c` to write a multiline comment. Its editor appears below the selected row, in the right pane for side-by-side layouts or across the inline diff. The label identifies the target path, old/new side, and line, including for comments on left-side deletions. Enter inserts a newline, ordinary viewer shortcuts become text, Esc closes the editor, and `Ctrl+s` immediately publishes one comment. File collapse is disabled while editing. Empty comments cannot be published.
 

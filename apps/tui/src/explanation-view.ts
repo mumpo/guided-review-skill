@@ -4,7 +4,6 @@ import {
   ImageRenderable,
   imageInfo,
   type ScrollBoxRenderable,
-  TextRenderable,
 } from "@opentui/core";
 import {
   type DiagramRenderer,
@@ -16,6 +15,7 @@ import {
 import type { Theme } from "./theme";
 import { MarkdownView, markdownLinks } from "./markdown-view";
 import type { Links } from "marked";
+import { CursorText } from "./cursor-text";
 
 /** Ordered Markdown narrative and independently rendered Mermaid blocks. */
 export class ExplanationView extends BoxRenderable {
@@ -142,7 +142,7 @@ export class ExplanationView extends BoxRenderable {
     }
 
     node.add(
-      new TextRenderable(this.renderer, {
+      new CursorText(this.renderer, {
         content,
         wrapMode: "word",
         flexShrink: 0,

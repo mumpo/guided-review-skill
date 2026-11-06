@@ -54,7 +54,7 @@ test("summary separates metadata from the unlabeled description in both themes a
           true,
         );
 
-        await ui.mockInput.pressKeys(["j"]);
+        await ui.mockInput.pressKeys([KeyCodes.ARROW_DOWN]);
         await ui.renderOnce();
 
         const scrollTop = body.scrollTop;
@@ -251,7 +251,7 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(ui.captureCharFrame()).not.toContain("Diagram");
     expect(ui.captureCharFrame()).not.toContain("greeting -> guide");
     expect(ui.captureCharFrame()).toContain("src/greeting.ts");
-    expect(ui.captureCharFrame()).toContain("  1        ▸-hello");
+    expect(ui.captureCharFrame()).toContain("  1         -hello");
     expect(ui.captureCharFrame()).toContain("        1   +hello world");
     expect(ui.captureCharFrame()).toContain("guide.md → docs/guide.md");
     expect(ui.captureCharFrame()).not.toContain("-goodbye");
@@ -260,7 +260,7 @@ test("opens a local fixture and navigates ordered sections with real key events"
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Section 2/3: Farewell");
-    expect(ui.captureCharFrame()).toContain(" 10        ▸-goodbye");
+    expect(ui.captureCharFrame()).toContain(" 10         -goodbye");
     expect(ui.captureCharFrame()).not.toContain("+hello world");
 
     ui.mockInput.pressTab();
