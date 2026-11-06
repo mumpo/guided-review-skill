@@ -10,6 +10,8 @@ import { type DiffMode, sectionDiffRows } from "./diff";
 import { DiffView } from "./diff-view";
 import { ExplanationView } from "./explanation-view";
 import { MarkdownView } from "./markdown-view";
+import { sessionHighlights } from "./highlight-service";
+import { reviewSyntaxSamples } from "./highlight-preload";
 import { type Theme, themes } from "./theme";
 
 /** A summary followed by the artifact's sections, in their original order. */
@@ -296,6 +298,7 @@ export function mountReview(
     renderer.off("capabilities", onCapabilities);
   });
   showPage();
+  sessionHighlights(renderer).preload(reviewSyntaxSamples(review));
 
   return applyTheme;
 }

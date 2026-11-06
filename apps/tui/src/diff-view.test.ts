@@ -1,3 +1,4 @@
+import { sessionHighlights } from "./highlight-service";
 import { expect, test } from "bun:test";
 import { RGBA, TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
@@ -36,6 +37,7 @@ test("both themes paint full inline rows and full split panes, including unequal
       try {
         mountReview(ui.renderer, data, theme, mode);
         await ui.mockInput.pressKeys(["n"]);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         const captured = ui.captureSpans();
@@ -157,6 +159,7 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
     const applyTheme = mountReview(ui.renderer, review());
 
     await ui.mockInput.pressKeys(["n"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("src/greeting.ts");
@@ -167,11 +170,13 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
     const before = ui.captureCharFrame();
 
     applyTheme(themes["github-light"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toBe(before);
 
     ui.resize(102, 45);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(
@@ -184,11 +189,13 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
     expect(ui.captureCharFrame()).toContain("src/greeting.ts");
 
     ui.resize(103, 45);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("src/greeting.ts");
 
     await ui.mockInput.pressKeys(["d"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("d: diff inline");
@@ -196,22 +203,26 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
 
     await ui.mockInput.pressKeys(["d"]);
     ui.resize(40, 45);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain(" │ ");
 
     await ui.mockInput.pressKeys(["n", "p"]);
     ui.resize(120, 45);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("docs/guide.md");
 
     await ui.mockInput.pressKeys(["d"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("docs/guide.md");
 
     await ui.mockInput.pressKeys(["n", "n"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain(
@@ -238,8 +249,10 @@ test("mode and width changes anchor scrolled diffs while theme changes preserve 
     );
 
     await ui.mockInput.pressKeys(["n"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
     await ui.mockInput.pressKeys(Array(35).fill("j"));
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     const body = ui.renderer.root.findDescendantById(
@@ -253,6 +266,7 @@ test("mode and width changes anchor scrolled diffs while theme changes preserve 
     expect(before).toBeDefined();
 
     await ui.mockInput.pressKeys(["d"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(visible()).toContain(`old_${before}`);
@@ -262,23 +276,27 @@ test("mode and width changes anchor scrolled diffs while theme changes preserve 
     const offset = body.scrollTop;
 
     applyTheme(themes["github-light"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toBe(frame);
     expect(body.scrollTop).toBe(offset);
 
     await ui.mockInput.pressKeys(["d"]); // side-by-side -> auto
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     const anchor = visible().match(/old_(\d+)/)?.[1];
 
     ui.resize(65, 24);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(visible()).toContain(`old_${anchor}`);
     expect(body.scrollTop).toBeGreaterThan(0);
 
     await ui.mockInput.pressKeys(Array(40).fill("\u001b[6~"));
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("+new_60");
@@ -319,10 +337,12 @@ test("markers, metadata, and empty sections retain readable themed messages in b
     try {
       mountReview(ui.renderer, data, theme);
       await ui.mockInput.pressKeys(["n"]);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       for (const mode of ["inline", "side-by-side"]) {
         await ui.mockInput.pressKeys(["d"]);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain(`d: diff ${mode}`);
@@ -348,6 +368,7 @@ test("markers, metadata, and empty sections retain readable themed messages in b
       }
 
       await ui.mockInput.pressKeys(["n"]);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       expect(ui.captureCharFrame()).toContain("(No referenced changes)");
@@ -379,6 +400,7 @@ test("syntax foregrounds follow live themes and layouts without changing source 
 
       for (const theme of [themes["github-dark"], themes["github-light"]]) {
         applyTheme(theme);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         const frame = ui.captureCharFrame();
@@ -432,6 +454,7 @@ test("syntax foregrounds follow live themes and layouts without changing source 
 
       await ui.mockInput.pressKeys(["d"]);
       ui.resize(55, 40);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       expect(ui.captureCharFrame()).toContain('const value = "new');
@@ -470,6 +493,7 @@ test("changed source spans combine with syntax in both themes/layouts and plain 
 
         for (const theme of [themes["github-dark"], themes["github-light"]]) {
           applyTheme(theme);
+          await sessionHighlights(ui.renderer).settled();
           await ui.renderOnce();
 
           const frame = ui.captureCharFrame();
@@ -559,6 +583,7 @@ test("wrapped span backgrounds survive scrolling, resize and live layout/theme c
     );
 
     await ui.mockInput.pressKeys(["n", ...Array(25).fill("j")]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     for (const theme of [themes["github-dark"], themes["github-light"]]) {
@@ -568,6 +593,7 @@ test("wrapped span backgrounds survive scrolling, resize and live layout/theme c
         ui.resize(width, 24);
 
         for (let mode = 0; mode < 3; mode++) {
+          await sessionHighlights(ui.renderer).settled();
           await ui.renderOnce();
 
           const spans = ui.captureSpans().lines.flatMap((line) => line.spans);
@@ -601,6 +627,7 @@ test("wrapped span backgrounds survive scrolling, resize and live layout/theme c
 
     await ui.mockInput.pressKeys(Array(100).fill("\u001b[6~"));
     ui.resize(160, 40);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("row19");
@@ -621,6 +648,7 @@ test("partial identifier edits emphasize whole words in both themes and layouts"
       try {
         mountReview(ui.renderer, data, theme, mode);
         await ui.mockInput.pressKeys(["n"]);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         const frame = ui.captureCharFrame();
@@ -659,6 +687,7 @@ test("file headers replace Git metadata with counts and collapse independently a
       try {
         const applyTheme = mountReview(ui.renderer, review(), theme, mode);
         await ui.mockInput.pressKeys(["n"]);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         const frame = ui.captureCharFrame();
@@ -697,6 +726,7 @@ test("file headers replace Git metadata with counts and collapse independently a
         }
 
         await ui.mockMouse.click(x, y);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).not.toContain("+hello world");
@@ -704,12 +734,14 @@ test("file headers replace Git metadata with counts and collapse independently a
         expect(ui.captureCharFrame()).toContain("›");
 
         await ui.mockMouse.click(x, y);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("+hello world");
         expect(ui.captureCharFrame()).not.toContain("›");
 
         await ui.mockMouse.click(x, y);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).not.toContain("+hello world");
@@ -721,6 +753,7 @@ test("file headers replace Git metadata with counts and collapse independently a
           ],
         );
         ui.resize(36, 45);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).not.toContain("+hello world");
@@ -728,6 +761,7 @@ test("file headers replace Git metadata with counts and collapse independently a
         expect(ui.captureCharFrame()).toContain("+2 -2");
 
         await ui.mockInput.pressKeys(["c"]);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("+hello");
@@ -735,6 +769,7 @@ test("file headers replace Git metadata with counts and collapse independently a
 
         await ui.mockInput.pressKeys(["n", "p"]);
         ui.resize(120, 45);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("+hello world");
