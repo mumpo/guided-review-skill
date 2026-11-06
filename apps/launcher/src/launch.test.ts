@@ -333,3 +333,57 @@ test("skill discovery paths launch from unrelated directories with resolved pref
     expect(argv.at(-1)).toBe(fixture);
   }
 });
+
+test("Herdr closes its review pane after success and leaves failures visible", async () => {
+  const directory = await mkdtemp(join(temp, "cleanup-"));
+  const marker = join(directory, "closed.json");
+  const binary = join(directory, "herdr");
+  await writeFile(
+    binary,
+    `#!${process.execPath}\nawait Bun.write(${JSON.stringify(marker)}, JSON.stringify(process.argv.slice(2)));\n`,
+    { mode: 0o700 },
+  );
+
+  for (const target of ["herdr-tab", "herdr-pane"] as const) {
+    for (const status of [0, 1]) {
+      await rm(marker, { force: true });
+      const { requests, run } = recorder(
+        JSON.stringify({
+          result: {
+            root_pane: { pane_id: "owned" },
+            pane: { pane_id: "owned" },
+          },
+        }),
+      );
+      await launch({ ...defaults, launch: target }, fixture, {
+        run,
+        env: { HERDR_PANE_ID: "original", HERDR_WORKSPACE_ID: "workspace" },
+      });
+      const viewer = viewerCommand(defaults, fixture).map(shellQuote).join(" ");
+      const simulatedViewer = [
+        process.execPath,
+        "-e",
+        `process.exit(${status})`,
+      ]
+        .map(shellQuote)
+        .join(" ");
+      const submitted = requests[1].argv[4].replace(viewer, simulatedViewer);
+      const child = Bun.spawn(["/bin/sh", "-c", submitted], {
+        env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      expect(await child.exited).toBe(status);
+      if (status === 0) {
+        expect(JSON.parse(await Bun.file(marker).text())).toEqual([
+          "pane",
+          "close",
+          "owned",
+        ]);
+      } else {
+        expect(await Bun.file(marker).exists()).toBe(false);
+      }
+    }
+  }
+});

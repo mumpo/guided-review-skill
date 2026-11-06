@@ -282,7 +282,19 @@ export async function launch(
         "Herdr did not return a new pane ID; viewer was not started.",
       );
 
-    await invoke(["herdr", "pane", "run", created, command]);
+    // Close only the pane we created. Herdr removes its tab when it is empty,
+    // while any additional panes the user opened in that tab remain intact.
+    const closePane = ["herdr", "pane", "close", created]
+      .map(shellQuote)
+      .join(" ");
+
+    await invoke([
+      "herdr",
+      "pane",
+      "run",
+      created,
+      `${command} && ${closePane}`,
+    ]);
   }
 
   return `Launch request accepted: ${target}. Viewer initialization is not confirmed.`;

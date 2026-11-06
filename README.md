@@ -75,7 +75,7 @@ Only `tui` is implemented; selecting `web` reports an error. Themes are selected
 | `herdr-pane` | Split the calling Herdr pane. |
 | `custom` | Execute the configured argument array for another terminal app. |
 
-Built-in tmux and Herdr targets require an existing calling session on macOS/Linux. Herdr tabs and splits use the CLI's returned new pane ID; native Herdr popups/overlays are deferred. Targets focus the new review. Auto-detection uses calling-pane environment markers, including `HERDR_ACTIVE_PANE_ID` when available; it does not start a multiplexer or choose an unrelated running session.
+Built-in tmux and Herdr targets require an existing calling session on macOS/Linux. Herdr tabs and splits use the CLI's returned new pane ID. Quitting a review successfully closes that review pane; Herdr also closes the tab when its last pane closes. Additional panes you open in that tab are preserved. Viewer failures leave the pane open for error inspection. Native Herdr popups/overlays are deferred. Targets focus the new review. Auto-detection uses calling-pane environment markers, including `HERDR_ACTIVE_PANE_ID` when available; it does not start a multiplexer or choose an unrelated running session.
 
 For split placement and popup size:
 
