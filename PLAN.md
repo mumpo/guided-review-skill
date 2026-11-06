@@ -121,11 +121,13 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 
 - [ ] Speed up review artifact creation: compact inspection report implemented; benchmark model latency/quality and evaluate reference/format changes before selecting fast-model defaults.
 - [ ] Add a commenting feature.
-- [ ] Review Vim motions.
+- [x] Review Vim motions: `j`/`k` scroll by line, `Ctrl+u`/`Ctrl+d` scroll by half the current viewport, and `h`/`l` navigate previous/next sections.
 - [ ] Redesign the main TUI layout and sections.
 - [ ] Launch the TUI automatically from the skill.
 
 ## Decisions and progress
+
+- TUI Vim motions: Added `h`/`l` section navigation with existing summary/end boundaries and scroll reset, plus `Ctrl+u`/`Ctrl+d` half-viewport scrolling (rounded down, minimum one row). Existing `j`/`k`, navigation keys, and plain `d` layout cycling remain available. Help and README document the bindings.
 
 - TUI file-header refinement: Replace visible raw Git metadata, hunk labels, and layout labels with a bordered filename header, clickable collapse chevron, and full captured-file addition/deletion counts. Keep selected source, line numbers, omission markers, and internal hunk boundaries; separate displayed hunks with a blank row. Renames retain both paths. `c` toggles the first file intersecting the viewport. Collapse state survives layout/theme/width changes and resets on section navigation. No artifact, coverage, or planned web-task changes.
 

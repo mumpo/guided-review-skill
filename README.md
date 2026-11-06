@@ -60,11 +60,12 @@ Line references show only selected changes, with explicit omission markers; whol
 
 | Keys | Action |
 | --- | --- |
-| `n`, `→`, `Tab` | Next section (from the summary, open the first). |
-| `p`, `←`, `Shift+Tab` | Previous section (from the first, return to summary). |
+| `n`, `l`, `→`, `Tab` | Next section (from the summary, open the first). |
+| `p`, `h`, `←`, `Shift+Tab` | Previous section (from the first, return to summary). |
 | `s`, `Home` | Return to summary. |
 | `End` | Open the last section. |
 | `↑`/`↓`, `k`/`j`, `PageUp`/`PageDown` | Scroll the current page. |
+| `Ctrl+u`/`Ctrl+d` | Scroll up/down half the current viewport height. |
 | `c` | Collapse or expand the first file intersecting the visible viewport. |
 | `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
