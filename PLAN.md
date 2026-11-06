@@ -123,9 +123,13 @@ Work through the unchecked tasks in order. Pick only the first available task, r
 - [ ] Add a commenting feature.
 - [x] Review Vim motions: `j`/`k` scroll by line, `Ctrl+u`/`Ctrl+d` scroll by half the current viewport, and `h`/`l` navigate previous/next sections.
 - [ ] Redesign the main TUI layout and sections.
-- [ ] Launch the TUI automatically from the skill.
+- [x] Launch the TUI automatically from the skill with shared TOML preferences and configurable terminal, tmux, Herdr, and custom placements.
+- [ ] Add custom theme palettes configurable through TOML; preserve bundled themes and live automatic appearance selection.
+- [ ] Add native Herdr popup/overlay placement through separately packaged Herdr plugin integration.
 
 ## Decisions and progress
+
+- Automatic viewer launch: The shared skill now invokes a local launcher after final artifact inspection, unless explicitly asked to skip opening. Shared `config.toml` preferences select TUI appearance, bundled light/dark themes, diff mode, and automatic/explicit terminal placement. JSON preferences require manual migration. Built-in targets cover macOS Terminal, tmux windows/splits/popups, and Herdr tabs/splits; custom argument-array launchers cover other terminals. Auto prefers calling Herdr, then tmux, then local macOS Terminal. Launch errors preserve the artifact and provide a manual command; detached launch acknowledgments do not establish viewer initialization. Custom palettes and native Herdr popup/plugin packaging are separate todos. Automated coverage includes both skill discovery links from unrelated working directories, literal paths, overrides, disabled opening, errors, and detached-process lifetime. Isolated real tmux window/split checks rendered the committed offline fixture, navigated and quit; the popup opened asynchronously and accepted quit through an attached PTY. All 131 tests, lint, formatting, typecheck, frozen-lockfile installation, diff checks, and skill-format validation passed; the optional Mermaid browser integration check was skipped. Native macOS Terminal and Herdr rendering, physical appearance changes, and fresh Codex/Claude end-to-end generation sessions have not been manually verified.
 
 - TUI Vim motions: Added `h`/`l` section navigation with existing summary/end boundaries and scroll reset, plus `Ctrl+u`/`Ctrl+d` half-viewport scrolling (rounded down, minimum one row). Existing `j`/`k`, navigation keys, and plain `d` layout cycling remain available. Help and README document the bindings.
 

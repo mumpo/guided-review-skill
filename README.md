@@ -44,6 +44,71 @@ Building preserves collected metadata and diff text, rejects invalid references,
 
 A generated example for `cli/cli#1` is in [skills/guided-review/fixtures/cli-pr-1.json](skills/guided-review/fixtures/cli-pr-1.json), with selection/action behavior ordered before command wiring and both parts of the file covered.
 
+## Automatic viewer launch
+
+After generating and inspecting a valid artifact, the shared Codex/Claude Code skill calls the local launcher. It opens a user-facing terminal and returns control to the agent. Explicit requests to generate without opening skip this step. Host permissions still apply; the skill cannot bypass sandbox or operating-system approval requirements.
+
+Create `$XDG_CONFIG_HOME/guided-review/config.toml` (default `~/.config/guided-review/config.toml`) using [config.example.toml](config.example.toml) as a starting point. Installation and viewing never write personal configuration. Use `--config PATH` on either launcher or TUI to select another file, or set `GUIDED_REVIEW_CONFIG`; precedence is CLI path → environment path → default path. Explicit paths must exist. Paths are resolved from the caller's working directory.
+
+```toml
+viewer = "tui"
+auto_open = true
+
+[tui]
+theme = "auto"
+light_theme = "github-light"
+dark_theme = "github-dark"
+diff_mode = "auto"
+launch = "auto"
+```
+
+Only `tui` is implemented; selecting `web` reports an error. Themes are selected from bundled `github-light` and `github-dark`; custom palettes are planned. In `auto` appearance, terminal light/dark reports select `light_theme`/`dark_theme`, including live changes and the dark fallback. A fixed `theme` bypasses this mapping.
+
+| `tui.launch` | Behavior |
+| --- | --- |
+| `auto` | Calling Herdr pane → new Herdr tab; otherwise calling tmux pane → tmux window; otherwise local macOS → Terminal window. Other environments receive setup guidance. |
+| `terminal-window` | New macOS Terminal window. Other apps/platforms use `custom`; SSH sessions cannot use this target. |
+| `tmux-window` | New window in the calling tmux session. |
+| `tmux-pane` | Split the calling tmux pane. |
+| `tmux-popup` | Floating popup in an attached tmux client. |
+| `herdr-tab` | New tab in the calling Herdr workspace. |
+| `herdr-pane` | Split the calling Herdr pane. |
+| `custom` | Execute the configured argument array for another terminal app. |
+
+Built-in tmux and Herdr targets require an existing calling session on macOS/Linux. Herdr tabs and splits use the CLI's returned new pane ID; native Herdr popups/overlays are deferred. Targets focus the new review. Auto-detection uses calling-pane environment markers, including `HERDR_ACTIVE_PANE_ID` when available; it does not start a multiplexer or choose an unrelated running session.
+
+For split placement and popup size:
+
+```toml
+[tui.pane]
+direction = "right" # "right" or "down"
+size = 50           # percentage occupied by the new split
+
+[tui.popup]
+width = 90
+height = 90
+```
+
+Sizes are integer percentages from 1 to 99. For another terminal, set `launch = "custom"` under `[tui]` and provide an executable and arguments:
+
+```toml
+[tui.custom]
+command = ["kitty", "--title", "Guided Review", "{viewer}"]
+```
+
+The single standalone `{viewer}` entry expands into the absolute Bun executable, viewer entrypoint, resolved preferences, and absolute artifact path as separate arguments. No shell expansion is performed. Use your terminal's execute-command option where required; the custom executable must create an interactive terminal. Its working directory is the caller's directory.
+
+Open an existing artifact with your configured placement:
+
+```sh
+bun run open:review path/to/review.json
+bun run open:review --config /absolute/path/config.toml path/to/review.json
+```
+
+`auto_open = false` disables skill-triggered opening; explicit `open:review` still opens. Launch failures preserve the artifact and print a manual command. Explicit targets never fall back. Detached launchers return after observing immediate startup errors; success acknowledges the launch request, without confirming viewer initialization or later errors.
+
+Previous `config.json` files are no longer loaded. If the default TOML file is absent and a sibling JSON file exists, viewing reports migration instructions. Translate `{ "theme": "github-light", "diffMode": "auto" }` into `[tui]` with `theme = "github-light"` and `diff_mode = "auto"`; no files are rewritten. When both exist, TOML is used.
+
 ## Open a review in the terminal
 
 After `bun install`, run from the repository root in an interactive terminal:
@@ -106,7 +171,7 @@ bun run dev:tui --diff-mode inline path/to/review.json
 bun run dev:tui path/to/review.json --diff-mode=side-by-side
 ```
 
-Set `"diffMode": "side-by-side"` in the same user config file described below for a persistent default. Precedence is `--diff-mode` → config file → `auto`; an explicit `auto` overrides a fixed config preference. Press `d` to cycle the session preference without changing the config file. Help shows the preference. Invalid values and duplicate flags fail before terminal initialization.
+Set `diff_mode = "side-by-side"` under `[tui]` in the user config file described below for a persistent default. Precedence is `--diff-mode` → config file → `auto`; an explicit `auto` overrides a fixed config preference. Press `d` to cycle the session preference without changing the config file. Help shows the preference. Invalid values and duplicate flags fail before terminal initialization.
 
 Inline mode displays the unified diff with old/new line numbers. Side-by-side mode displays old lines on the left and new lines on the right, with separate line numbers and visible `-`/`+` signs. Lines pair in original order within each contiguous selected change block; unmatched lines leave the other pane blank. Context appears on both sides. Omission markers prevent pairing across unselected changes, and no unselected lines are added to fill a pane. Both panes wrap independently and stay aligned; forced side-by-side remains split at narrow widths. Mode switches and resizing retain the current section and anchor the visible diff row where possible.
 
@@ -135,13 +200,15 @@ bun run dev:tui --theme github-light path/to/review.json
 bun run dev:tui path/to/review.json --theme=github-dark
 ```
 
-For a persistent preference, set `GUIDED_REVIEW_THEME` in your shell or create `$XDG_CONFIG_HOME/guided-review/config.json` (default: `~/.config/guided-review/config.json`):
+For a persistent preference, set `GUIDED_REVIEW_THEME` in your shell or create `$XDG_CONFIG_HOME/guided-review/config.toml` (default: `~/.config/guided-review/config.toml`):
 
-```json
-{ "theme": "github-light", "diffMode": "auto" }
+```toml
+[tui]
+theme = "github-light"
+diff_mode = "auto"
 ```
 
-Precedence is `--theme` → `GUIDED_REVIEW_THEME` → config file → `auto`. All sources accept `auto`, `github-light`, or `github-dark`; an explicit `auto` restores automatic selection even when a lower-priority source names a fixed theme. Fixed themes ignore terminal appearance changes. A missing config file is normal and the viewer never creates one. Malformed/unreadable config files, unknown keys, and invalid theme or diff-mode values produce errors before terminal initialization, including when another source overrides them. An empty environment value is invalid; unset it to use the config file. `--help` works without loading configuration.
+Precedence is `--theme` → `GUIDED_REVIEW_THEME` → config file → `auto`. All sources accept `auto`, `github-light`, or `github-dark`; an explicit `auto` restores automatic selection even when a lower-priority source names a fixed theme. Fixed themes ignore terminal appearance changes. A missing default config file is normal and the viewer never creates one. Malformed/unreadable config files, unknown keys, and invalid settings produce errors before terminal initialization, including when another source overrides them. An empty environment value is invalid; unset it to use the config file. `--help` works without loading configuration.
 
 Both palettes set text and background colors explicitly for the viewport, navigation, narrative, diagrams, diffs, help, and scrollbars. Added and deleted lines use distinct foregrounds and full-row backgrounds (full-pane backgrounds in side-by-side mode), including wrapped continuations. Line-number gutters use GitHub’s green or red background colors on changed lines, replacing pipe separators; context gutters use the theme’s neutral surface. Context, file/hunk headers, line numbers, omission markers, and non-text messages use semantic theme colors. Narrative Markdown uses the same active theme.
 
@@ -180,6 +247,8 @@ Coverage counts each addition and deletion independently, even when they replace
 
 - `packages/core`: shared, runtime-independent review model and diff logic.
 - `packages/collector`: local GitHub CLI collection helper.
+- `packages/preferences`: local TOML configuration shared by launchers and the TUI.
+- `apps/launcher`: terminal, tmux, Herdr, and custom viewer launch adapters.
 - `apps/tui`: OpenTUI terminal viewer with local validation, summary, section navigation, and referenced unified diffs.
 - `apps/web`: browser viewer, planned with React and shadcn/ui.
 - `skills/guided-review`: shared Codex and Claude Code generation skill, offline build/validation helper, and a real-PR example.
@@ -190,6 +259,7 @@ Install [Bun](https://bun.sh/) 1.3.14 or later, then run `bun install`. Generati
 
 | Command | Purpose |
 | --- | --- |
+| `bun run open:review <artifact.json>` | Open a local artifact using configured terminal placement. |
 | `bun run dev <artifact.json>` or `bun run dev:tui <artifact.json>` | Open a local artifact in the terminal viewer. |
 | `bun run dev:web` | Web development placeholder. |
 | `bun run test` | Run the test suite. |

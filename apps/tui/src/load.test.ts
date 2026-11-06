@@ -97,6 +97,7 @@ test("CLI reports usage, invalid files, and noninteractive startup failures", as
         ...process.env,
         XDG_CONFIG_HOME: temp,
         GUIDED_REVIEW_THEME: undefined,
+        GUIDED_REVIEW_CONFIG: undefined,
       },
     });
     const [code, stdout, stderr] = await Promise.all([
@@ -112,7 +113,7 @@ test("CLI reports usage, invalid files, and noninteractive startup failures", as
   expect(await run(["--theme=invalid", fixture])).toMatchObject({
     code: 1,
     stderr: expect.stringContaining(
-      "--theme: expected auto, github-light, or github-dark",
+      "--theme: expected auto, github-light, github-dark",
     ),
   });
 

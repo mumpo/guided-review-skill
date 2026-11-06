@@ -97,3 +97,16 @@ test("a live reply during initial detection wins; quitting during detection neve
     else expect(apply.mock.calls[0][0].name).toBe("github-light");
   }
 });
+
+test("configured bundled light/dark themes follow initial and live appearance", async () => {
+  const { emitter, renderer } = terminal("light");
+  const applied: string[] = [];
+
+  await startTheme(renderer, "auto", (theme) => applied.push(theme.name), {
+    lightTheme: "github-dark",
+    darkTheme: "github-light",
+  });
+  emitter.emit("theme_mode", "dark");
+
+  expect(applied).toEqual(["github-dark", "github-light"]);
+});

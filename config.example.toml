@@ -1,0 +1,25 @@
+# Copy to ~/.config/guided-review/config.toml (or under $XDG_CONFIG_HOME).
+viewer = "tui"
+auto_open = true
+
+[tui]
+theme = "auto"
+light_theme = "github-light"
+dark_theme = "github-dark"
+diff_mode = "auto"
+# auto, terminal-window, tmux-window, tmux-pane, tmux-popup,
+# herdr-tab, herdr-pane, custom
+launch = "auto"
+
+[tui.pane]
+direction = "right"
+size = 50
+
+[tui.popup]
+width = 90
+height = 90
+
+# When launch = "custom", use your terminal's execute-command arguments.
+# The standalone {viewer} expands into separate executable/argument entries.
+[tui.custom]
+command = ["kitty", "--title", "Guided Review", "{viewer}"]

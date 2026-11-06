@@ -31,11 +31,21 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   try {
     let applyTheme: ReturnType<typeof mountReview> | undefined;
 
-    await startTheme(renderer, preferences.theme, (theme) => {
-      if (applyTheme) applyTheme(theme);
-      else
-        applyTheme = mountReview(renderer, review, theme, preferences.diffMode);
-    });
+    await startTheme(
+      renderer,
+      preferences.theme,
+      (theme) => {
+        if (applyTheme) applyTheme(theme);
+        else
+          applyTheme = mountReview(
+            renderer,
+            review,
+            theme,
+            preferences.diffMode,
+          );
+      },
+      preferences,
+    );
     await renderer.closed;
   } finally {
     renderer.destroy();
