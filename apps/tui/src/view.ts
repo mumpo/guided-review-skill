@@ -2,6 +2,7 @@ import {
   BoxRenderable,
   type CliRenderer,
   type KeyEvent,
+  type PasteEvent,
   ScrollBoxRenderable,
   TextRenderable,
 } from "@opentui/core";
@@ -14,6 +15,9 @@ import { sessionHighlights } from "./highlight-service";
 import { reviewSyntaxSamples } from "./highlight-preload";
 import { type Theme, themes } from "./theme";
 import { PullRequestHeader } from "./pr-header";
+import { githubCommentPublisher, type PublishComment } from "./comments";
+import { CursorText } from "./cursor-text";
+import { PageCursor } from "./page-cursor";
 
 /** A summary followed by the artifact's sections, in their original order. */
 export function mountReview(
@@ -21,9 +25,11 @@ export function mountReview(
   review: LoadedReview,
   theme: Theme = themes["github-dark"],
   diffMode: DiffMode = "auto",
+  publish?: PublishComment,
 ): (theme: Theme) => void {
   const { snapshot, analysis } = review;
   const pr = snapshot.pullRequest;
+  const commentController = new AbortController();
   let page = 0;
 
   const root = new BoxRenderable(renderer, {
@@ -57,13 +63,13 @@ export function mountReview(
     flexDirection: "column",
     flexShrink: 0,
   });
-  let narrativeText: TextRenderable[] = [];
+  let narrativeText: CursorText[] = [];
   let narrativeMarkdown: MarkdownView[] = [];
   let prHeader: PullRequestHeader | undefined;
   let descriptionSeparator: BoxRenderable | undefined;
 
   function plain(content: string) {
-    const node = new TextRenderable(renderer, {
+    const node = new CursorText(renderer, {
       content,
       width: "100%",
       wrapMode: "word",
@@ -73,6 +79,7 @@ export function mountReview(
       marginBottom: 1,
     });
 
+    node.setCursorTheme(theme.name);
     narrative.add(node);
     narrativeText.push(node);
   }
@@ -90,8 +97,15 @@ export function mountReview(
   const explanation = new ExplanationView(renderer, body, theme);
   body.add(explanation);
 
-  const changes = new DiffView(renderer, body, theme);
+  const changes = new DiffView(
+    renderer,
+    body,
+    theme,
+    sessionHighlights(renderer),
+    publish ?? githubCommentPublisher(pr, undefined, commentController.signal),
+  );
   body.add(changes);
+  const cursor = new PageCursor(body, [narrative, explanation], changes);
 
   const help = new TextRenderable(renderer, {
     id: "help",
@@ -114,6 +128,7 @@ export function mountReview(
     narrative.backgroundColor = theme.background;
 
     for (const node of narrativeText) {
+      node.setCursorTheme(theme.name);
       node.fg = theme.markdown.text;
       node.bg = theme.background;
     }
@@ -146,7 +161,7 @@ export function mountReview(
   applyTheme(theme);
 
   function updateHelp() {
-    help.content = `n/p h/l ←/→ Tab: sections | s/Home: summary | End: last\n↑/↓ j/k PgUp/PgDn: scroll | Ctrl+u/d: half page | c: collapse file | d: diff ${diffMode} | q/Ctrl+C: quit`;
+    help.content = `n/p h/l ←/→ Tab: sections | s/Home: summary | End: last | d: diff ${diffMode}\nj/k: cursor | Space: side | c: comment | z: collapse | q/Ctrl+C: quit\n↑/↓ PgUp/PgDn: scroll | Ctrl+u/d: half page`;
   }
 
   updateHelp();
@@ -224,9 +239,12 @@ export function mountReview(
     }
 
     body.scrollTo(0);
+    cursor.reset();
   }
 
   function onKey(key: KeyEvent) {
+    if (changes.handleCommentKey(key)) return;
+
     if (key.name === "q" || (key.ctrl && key.name === "c")) {
       renderer.destroy();
       return;
@@ -248,7 +266,13 @@ export function mountReview(
 
     switch (key.name) {
       case "c":
+        changes.openComment();
+        break;
+      case "z":
         changes.toggleVisibleFile();
+        break;
+      case "space":
+        changes.switchSide();
         break;
       case "d": {
         const modes: DiffMode[] = ["auto", "inline", "side-by-side"];
@@ -278,10 +302,14 @@ export function mountReview(
         nextPage = snapshot.sections.length;
         break;
       case "j":
+        cursor.move(1);
+        break;
       case "down":
         body.scrollBy(1);
         break;
       case "k":
+        cursor.move(-1);
+        break;
       case "up":
         body.scrollBy(-1);
         break;
@@ -304,6 +332,8 @@ export function mountReview(
   }
 
   renderer.keyInput.on("keypress", onKey);
+  const onPaste = (event: PasteEvent) => changes.handleCommentPaste(event);
+  renderer.keyInput.on("paste", onPaste);
 
   const onResize = () => {
     changes.resizeLayout();
@@ -314,10 +344,15 @@ export function mountReview(
 
   renderer.on("capabilities", onCapabilities);
   renderer.on("resize", onResize);
+  const onFrame = () => cursor.refresh();
+  renderer.on("frame", onFrame);
   renderer.once("destroy", () => {
+    commentController.abort();
     renderer.keyInput.off("keypress", onKey);
+    renderer.keyInput.off("paste", onPaste);
     renderer.off("resize", onResize);
     renderer.off("capabilities", onCapabilities);
+    renderer.off("frame", onFrame);
   });
   showPage();
   sessionHighlights(renderer).preload(reviewSyntaxSamples(review));

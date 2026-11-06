@@ -1,3 +1,4 @@
+import { cursorBackground } from "./cursor-highlight";
 import { expect, test } from "bun:test";
 import { RGBA, ScrollBoxRenderable } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
@@ -7,6 +8,7 @@ import type { FileRows } from "./diff";
 import type { SyntaxService } from "./highlight-service";
 import { readableTokenColor, type SourceColors } from "./highlight";
 import { themes } from "./theme";
+import type { CursorText } from "./cursor-text";
 
 class DelayedSyntax implements SyntaxService {
   requests: { source: string; signal?: AbortSignal; finish: () => void }[] = [];
@@ -36,6 +38,60 @@ class DelayedSyntax implements SyntaxService {
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
+
+test("late Markdown syntax colors preserve the selected logical line and its original styles", async () => {
+  const ui = await createTestRenderer({ width: 30, height: 18 });
+  const syntax = new DelayedSyntax();
+  const view = new MarkdownView(ui.renderer, themes["github-dark"], syntax);
+  ui.renderer.root.add(view);
+
+  try {
+    view.setContent(
+      '```ts\nconst first = 1;\nconst second = "Unicode 🐱 wraps to another row";\n```',
+    );
+    const code = view.getChildren()[0] as CursorText;
+    code.setCursorLine(1);
+    await ui.renderOnce();
+
+    const selected = () => code.selectedText;
+    expect(selected()).toBe(
+      'const second = "Unicode 🐱 wraps to another row";',
+    );
+
+    await syntax.finish();
+    view.setTheme(themes["github-light"]);
+    ui.resize(22, 18);
+    await ui.renderOnce();
+
+    expect(selected()).toBe(
+      'const second = "Unicode 🐱 wraps to another row";',
+    );
+    expect(
+      ui
+        .captureSpans()
+        .lines.filter((line) =>
+          line.spans.some((span) =>
+            span.bg.equals(
+              RGBA.fromHex(
+                cursorBackground(
+                  themes["github-light"].markdown.codeBackground,
+                  "github-light",
+                ),
+              ),
+            ),
+          ),
+        ).length,
+    ).toBeGreaterThan(1);
+    code.setCursorLine();
+
+    expect(selected()).toBe("");
+    expect(code.plainText).toBe(
+      'const first = 1;\nconst second = "Unicode 🐱 wraps to another row";',
+    );
+  } finally {
+    await ui.dispose();
+  }
+});
 
 function file(source: string): FileRows {
   return {

@@ -6,6 +6,9 @@ import {
   StyledText,
   TextRenderable,
   TextAttributes,
+  TextareaRenderable,
+  type KeyEvent,
+  type PasteEvent,
 } from "@opentui/core";
 import {
   type DiffCell,
@@ -30,6 +33,27 @@ import {
   changedFileSpans,
   emphasizeSpans,
 } from "./changed-spans";
+import {
+  commentKey,
+  type CommentTarget,
+  type PublishedComment,
+  type PublishComment,
+} from "./comments";
+import { cursorBackground } from "./cursor-highlight";
+
+interface CursorRow {
+  node: BoxRenderable | TextRenderable;
+  file: string;
+  targets: CommentTarget[];
+  header?: boolean;
+}
+
+interface Draft {
+  body: string;
+  cursor: number;
+  pending?: boolean;
+  error?: string;
+}
 
 /** Layout owns presentation only; all rows come from resolved captured changes. */
 export class DiffView extends BoxRenderable {
@@ -58,12 +82,29 @@ export class DiffView extends BoxRenderable {
   private signature = "";
   private anchorEpoch = 0;
   private fills: { node: BoxRenderable; role: RowRole }[] = [];
+  private cursorBoxes: {
+    box: BoxRenderable;
+    cell: DiffCell;
+    file: string;
+  }[] = [];
+  private cursorRows: CursorRow[] = [];
+  private selected?: CommentTarget;
+  private selectedHeader?: string;
+  private preferredSide: "old" | "new" = "new";
+  private cursorActive = true;
+  private active?: CommentTarget;
+  private editor?: TextareaRenderable;
+  private drafts = new Map<string, Draft>();
+  private comments = new Map<string, PublishedComment[]>();
+  private commentBoxes: BoxRenderable[] = [];
+  private commentText: TextRenderable[] = [];
 
   constructor(
     private renderer: CliRenderer,
     private body: ScrollBoxRenderable,
     theme: Theme,
     private highlights: SyntaxService = sessionHighlights(renderer),
+    private publish?: PublishComment,
   ) {
     super(renderer, {
       id: "changes",
@@ -75,6 +116,11 @@ export class DiffView extends BoxRenderable {
   }
 
   setFiles(files: FileRows[], preference: DiffMode) {
+    this.captureEditor();
+    this.active = undefined;
+    this.selected = undefined;
+    this.selectedHeader = undefined;
+    this.preferredSide = "new";
     this.anchorEpoch++;
     this.files = files;
     this.collapsed.clear();
@@ -111,6 +157,197 @@ export class DiffView extends BoxRenderable {
   protected destroySelf() {
     this.controller.abort();
     super.destroySelf();
+  }
+
+  private captureEditor() {
+    if (!this.editor || !this.active) return;
+
+    const draft = this.drafts.get(commentKey(this.active));
+    if (draft) {
+      draft.body = this.editor.plainText;
+      draft.cursor = this.editor.cursorOffset;
+    }
+  }
+
+  handleCommentPaste(event: PasteEvent) {
+    if (this.active && this.drafts.get(commentKey(this.active))?.pending)
+      event.preventDefault();
+  }
+
+  /** Editor input must be handled before viewer shortcuts. */
+  handleCommentKey(key: KeyEvent) {
+    if (!this.active) return false;
+
+    if (key.name === "escape") {
+      this.captureEditor();
+      this.active = undefined;
+      this.preserve(() => this.rebuild());
+      key.preventDefault();
+    } else if (key.ctrl && key.name === "s") {
+      this.captureEditor();
+      void this.submitComment();
+      key.preventDefault();
+    } else if (this.drafts.get(commentKey(this.active))?.pending) {
+      key.preventDefault();
+    }
+
+    return true;
+  }
+
+  openComment() {
+    if (!this.cursorActive || !this.selected) return;
+
+    this.active = { ...this.selected };
+    const key = commentKey(this.active);
+    if (!this.drafts.has(key)) this.drafts.set(key, { body: "", cursor: 0 });
+
+    this.preserve(() => this.rebuild());
+    this.revealCursor();
+  }
+
+  private async submitComment() {
+    const target = this.active;
+    if (!target) return;
+
+    const key = commentKey(target);
+    const draft = this.drafts.get(key);
+    if (!draft || draft.pending) return;
+
+    if (!draft.body.trim()) {
+      draft.error = "Write a comment before publishing.";
+      this.preserve(() => this.rebuild());
+      return;
+    }
+
+    draft.pending = true;
+    draft.error = undefined;
+    this.preserve(() => this.rebuild());
+
+    try {
+      if (!this.publish) throw new Error("Comment publishing is unavailable.");
+
+      const posted = await this.publish(target, draft.body);
+      this.comments.set(key, [...(this.comments.get(key) ?? []), posted]);
+      this.drafts.delete(key);
+      if (this.active && commentKey(this.active) === key)
+        this.active = undefined;
+    } catch (error) {
+      draft.pending = false;
+      draft.error = error instanceof Error ? error.message : String(error);
+    }
+
+    if (!this.isDestroyed) this.preserve(() => this.rebuild());
+  }
+
+  private visibleCursorRows() {
+    return this.cursorRows.filter(
+      (row) => row.header || !this.collapsed.has(row.file),
+    );
+  }
+
+  private matchesCursor(row: CursorRow) {
+    return row.header
+      ? this.selectedHeader === row.file
+      : row.targets.some((target) => this.isSelected(target));
+  }
+
+  private selectRow(row?: CursorRow) {
+    this.selectedHeader = row?.header ? row.file : undefined;
+    this.selected = row?.header
+      ? undefined
+      : (row?.targets.find((target) => target.side === this.preferredSide) ??
+        row?.targets[0]);
+  }
+
+  get hasCursor() {
+    return (
+      this.cursorActive &&
+      this.visibleCursorRows().some((row) => this.matchesCursor(row))
+    );
+  }
+
+  setCursorActive(active: boolean) {
+    if (this.cursorActive === active) return;
+
+    this.cursorActive = active;
+    this.setTheme(this.palette);
+  }
+
+  focusCursor() {
+    const row = this.visibleCursorRows()[0];
+    if (!row) return false;
+
+    this.selectRow(row);
+    this.cursorActive = true;
+    this.setTheme(this.palette);
+    this.revealCursor();
+
+    return true;
+  }
+
+  moveCursor(direction: number): boolean {
+    const rows = this.visibleCursorRows();
+    if (!rows.length) {
+      this.selectRow();
+      this.setTheme(this.palette);
+      return false;
+    }
+
+    const current = rows.findIndex((row) => this.matchesCursor(row));
+    const index =
+      current < 0
+        ? 0
+        : Math.max(0, Math.min(rows.length - 1, current + direction));
+    if (index === current) {
+      this.revealCursor();
+      return false;
+    }
+    this.selectRow(rows[index]);
+    this.setTheme(this.palette);
+    this.revealCursor();
+
+    return true;
+  }
+
+  switchSide() {
+    if (!this.cursorActive) return;
+
+    const row = this.cursorRows.find((row) =>
+      row.targets.some((target) => this.isSelected(target)),
+    );
+    const other = row?.targets.find(
+      (target) => target.side !== this.selected?.side,
+    );
+    if (!other) return;
+
+    this.selected = other;
+    this.preferredSide = other.side;
+    this.setTheme(this.palette);
+  }
+
+  private isSelected(target: CommentTarget) {
+    return this.selected && commentKey(this.selected) === commentKey(target);
+  }
+
+  private revealCursor() {
+    const signal = this.controller.signal;
+    this.body.afterLayout(() => {
+      if (signal.aborted || this.isDestroyed || !this.cursorActive) return;
+
+      const row = this.visibleCursorRows().find((row) =>
+        this.matchesCursor(row),
+      );
+      if (!row) return;
+
+      const bottom = this.editor
+        ? this.editor.y + this.editor.height + 1
+        : row.node.y + row.node.height;
+      const top = this.body.viewport.y;
+      const height = this.body.viewport.height;
+      if (row.node.y < top) this.body.scrollBy(row.node.y - top);
+      else if (bottom > top + height)
+        this.body.scrollBy(Math.min(bottom - top - height, row.node.y - top));
+    });
   }
 
   setMode(preference: DiffMode) {
@@ -172,6 +409,12 @@ export class DiffView extends BoxRenderable {
   }
 
   toggleVisibleFile() {
+    const selectedFile = this.selectedHeader ?? this.selected?.fileId;
+    if (this.cursorActive && selectedFile) {
+      this.toggleFile(selectedFile);
+      return;
+    }
+
     const top = this.body.viewport.y;
     const bottom = top + this.body.viewport.height;
     const header = this.headers.find(
@@ -186,6 +429,8 @@ export class DiffView extends BoxRenderable {
   }
 
   private toggleFile(id: string) {
+    if (this.active) return;
+
     const header = this.headers.find(({ file }) => file.id === id);
     if (!header) return;
 
@@ -195,6 +440,17 @@ export class DiffView extends BoxRenderable {
 
     header.content.visible = !this.collapsed.has(id);
     header.chevron.content = header.content.visible ? "⌄" : "›";
+    if (
+      this.cursorActive &&
+      (this.selectedHeader ?? this.selected?.fileId) === id
+    ) {
+      if (this.collapsed.has(id))
+        this.selectRow(
+          this.cursorRows.find((row) => row.header && row.file === id),
+        );
+      this.revealCursor();
+    }
+    this.setTheme(this.palette);
   }
 
   private fileHeader(file: FileRows) {
@@ -260,17 +516,29 @@ export class DiffView extends BoxRenderable {
     this.add(content);
     this.headers.push({ file, box, chevron, path, added, deleted, content });
     this.logical.push({ node: box, file: file.id, sources: [0] });
+    this.cursorRows.push({
+      node: box,
+      file: file.id,
+      targets: [],
+      header: true,
+    });
 
     return content;
   }
 
   private rebuild() {
+    this.captureEditor();
+    this.editor = undefined;
     for (const child of this.getChildren()) child.destroyRecursively();
 
     this.headers = [];
     this.painted = [];
     this.fills = [];
+    this.cursorBoxes = [];
     this.logical = [];
+    this.cursorRows = [];
+    this.commentBoxes = [];
+    this.commentText = [];
     this.signature = this.layoutSignature();
     if (!this.files.length) return;
 
@@ -325,15 +593,15 @@ export class DiffView extends BoxRenderable {
             flexDirection: "column",
             flexShrink: 0,
           });
-          node.add(
-            this.text({
-              text: full.prefix ? text.slice(full.prefix.length) : text,
-              prefix: full.prefix ?? "",
-              role: full.role,
-              line: full.line,
-              side: full.role === "deletion" ? "old" : "new",
-            }),
-          );
+          const cell: DiffCell = {
+            text: full.prefix ? text.slice(full.prefix.length) : text,
+            prefix: full.prefix ?? "",
+            role: full.role,
+            line: full.line,
+            side: full.role === "deletion" ? "old" : "new",
+          };
+          node.add(this.text(cell));
+          this.cursorBoxes.push({ box: node, cell, file: file.id });
           this.fills.push({ node, role: full.role });
         } else {
           node = new BoxRenderable(this.renderer, {
@@ -358,6 +626,11 @@ export class DiffView extends BoxRenderable {
             if (cell) {
               this.fills.push({ node: pane, role: cell.role });
               pane.add(this.text(cell));
+              this.cursorBoxes.push({
+                box: pane,
+                cell,
+                file: file.id,
+              });
               if (cell.marker)
                 pane.add(
                   this.text({ text: cell.marker, prefix: "", role: "marker" }),
@@ -370,9 +643,181 @@ export class DiffView extends BoxRenderable {
 
         content.add(node);
         this.logical.push({ node, file: file.id, sources: row.sources });
+
+        const targets: CommentTarget[] = [];
+        for (const source of row.sources) {
+          const line = file.rows[source].line;
+          if (!line || line.kind === "no-newline") continue;
+
+          const sides: ("old" | "new")[] =
+            line.kind === "deletion"
+              ? ["old"]
+              : line.kind === "addition" || mode === "inline"
+                ? ["new"]
+                : ["old", "new"];
+          for (const side of sides) {
+            const number = side === "old" ? line.oldLine : line.newLine;
+            if (number !== undefined && number !== null)
+              targets.push({
+                fileId: file.id,
+                path: file.newPath ?? file.oldPath ?? "",
+                side,
+                line: number,
+              });
+          }
+        }
+
+        if (targets.length) {
+          this.cursorRows.push({ node, file: file.id, targets });
+          // Inline context has one visible cell, but old-side comments still attach
+          // to that same captured source row after switching from split mode.
+          const commentTargets = [...targets];
+          if (mode === "inline") {
+            const line = row.full?.line;
+            if (line?.kind === "context" && line.oldLine != null) {
+              commentTargets.push({
+                ...targets[0],
+                side: "old",
+                line: line.oldLine,
+              });
+            }
+          }
+          this.renderComments(content, commentTargets, mode);
+        }
       }
     });
+
+    if (!this.visibleCursorRows().some((row) => this.matchesCursor(row))) {
+      // Keep the selected captured context line when inline mode hides its old cell.
+      const file = this.files.find((file) => file.id === this.selected?.fileId);
+      const source = file?.rows.find(
+        (row) =>
+          row.line?.kind === "context" &&
+          row.line.oldLine === this.selected?.line,
+      );
+      const equivalent = this.selected?.side === "old" && source?.line?.newLine;
+      const replacement =
+        equivalent &&
+        this.cursorRows
+          .flatMap((row) => row.targets)
+          .find(
+            (target) =>
+              target.fileId === file?.id &&
+              target.side === "new" &&
+              target.line === equivalent,
+          );
+      if (replacement) {
+        this.selected = replacement;
+        this.selectedHeader = undefined;
+      } else this.selectRow(this.visibleCursorRows()[0]);
+    }
+
     this.setTheme(this.palette);
+    if (this.editor) {
+      const editor = this.editor as TextareaRenderable;
+      editor.focus();
+      const draft = this.active && this.drafts.get(commentKey(this.active));
+      if (draft) editor.cursorOffset = draft.cursor;
+    }
+  }
+
+  private renderComments(
+    content: BoxRenderable,
+    targets: CommentTarget[],
+    mode: "inline" | "side-by-side",
+  ) {
+    for (const target of targets) {
+      const key = commentKey(target);
+      const published = this.comments.get(key) ?? [];
+      const active = this.active && commentKey(this.active) === key;
+      const draft = this.drafts.get(key);
+      const status = draft?.pending || draft?.error;
+      if (!published.length && !active && !status) continue;
+
+      const row = new BoxRenderable(this.renderer, {
+        width: "100%",
+        flexDirection: "row",
+        flexShrink: 0,
+      });
+      if (mode === "side-by-side") {
+        row.add(
+          new BoxRenderable(this.renderer, { flexGrow: 1, flexBasis: 0 }),
+        );
+        row.add(new BoxRenderable(this.renderer, { width: 3 }));
+      }
+
+      // Keep borders/padding inside an equal-width pane so they do not shift
+      // the editor left relative to the code pane above it.
+      const pane = new BoxRenderable(this.renderer, {
+        flexGrow: 1,
+        flexBasis: 0,
+        minWidth: 0,
+        flexDirection: "column",
+      });
+      const box = new BoxRenderable(this.renderer, {
+        width: "100%",
+        minWidth: 0,
+        flexShrink: 0,
+        flexDirection: "column",
+        border: true,
+        borderColor: this.palette.navigation.foreground,
+        backgroundColor: this.palette.surface,
+        paddingLeft: 1,
+        paddingRight: 1,
+      });
+      this.commentBoxes.push(box);
+      const text = (value: string) => {
+        const node = new TextRenderable(this.renderer, {
+          content: value,
+          width: "100%",
+          wrapMode: "word",
+          flexShrink: 0,
+          fg: this.palette.text,
+          bg: this.palette.surface,
+        });
+        this.commentText.push(node);
+        box.add(node);
+      };
+
+      text(
+        `${target.path} · ${target.side === "old" ? "old" : "new"} line ${target.line}`,
+      );
+      for (const comment of published) {
+        text(`${comment.author}: ${comment.body}\n${comment.url}`);
+      }
+
+      if (active) {
+        if (draft) {
+          this.editor = new TextareaRenderable(this.renderer, {
+            id: "comment-editor",
+            width: "100%",
+            height: 5,
+            flexShrink: 0,
+            initialValue: draft.body,
+            wrapMode: "word",
+            backgroundColor: this.palette.background,
+            textColor: this.palette.text,
+            focusedBackgroundColor: this.palette.background,
+            focusedTextColor: this.palette.text,
+            keyBindings: [{ name: "return", action: "newline" }],
+            onContentChange: () => this.captureEditor(),
+          });
+          box.add(this.editor);
+          text(draft.pending ? "Publishing…" : "Esc: close · Ctrl+s: publish");
+          if (draft.error) text(draft.error);
+        }
+      } else if (status) {
+        text(
+          draft?.pending
+            ? "Publishing…"
+            : `${draft?.error}\nPress c on this line to reopen the draft.`,
+        );
+      }
+
+      pane.add(box);
+      row.add(pane);
+      content.add(row);
+    }
   }
 
   private text(cell: DiffCell, width: number | "100%" = "100%") {
@@ -393,11 +838,14 @@ export class DiffView extends BoxRenderable {
     this.palette = theme;
     this.backgroundColor = theme.diff.background;
 
-    for (const { box, chevron, path, added, deleted } of this.headers) {
-      box.backgroundColor = theme.surface;
+    for (const { file, box, chevron, path, added, deleted } of this.headers) {
+      const background =
+        this.cursorActive && this.selectedHeader === file.id
+          ? cursorBackground(theme.surface, theme.name)
+          : theme.surface;
+      box.backgroundColor = background;
       box.borderColor = theme.muted;
-      for (const node of [chevron, path, added, deleted])
-        node.bg = theme.surface;
+      for (const node of [chevron, path, added, deleted]) node.bg = background;
 
       chevron.fg = theme.muted;
       path.fg = theme.diff.file;
@@ -412,13 +860,34 @@ export class DiffView extends BoxRenderable {
           : theme.diff.background;
     }
 
+    const selectedBoxes = this.cursorBoxes.filter(
+      ({ cell, file }) =>
+        this.cursorActive &&
+        this.selected &&
+        cell.line &&
+        cell.side === this.selected.side &&
+        file === this.selected.fileId &&
+        (cell.side === "old" ? cell.line.oldLine : cell.line.newLine) ===
+          this.selected.line,
+    );
+    for (const { box } of this.cursorBoxes) {
+      const selected = selectedBoxes.some((entry) => entry.box === box);
+      if (selected)
+        box.backgroundColor = cursorBackground(box.backgroundColor, theme.name);
+    }
+
+    const selectedCells = new Set(selectedBoxes.map(({ cell }) => cell));
     for (const { node, cell } of this.painted) {
+      const selected = selectedCells.has(cell);
+      const highlight = (background: string) =>
+        selected ? cursorBackground(background, theme.name) : background;
       const changed = cell.role === "addition" || cell.role === "deletion";
       const pair = changed
         ? theme.diff[cell.role as "addition" | "deletion"]
         : undefined;
       const foreground = pair?.foreground ?? this.foreground(cell.role);
-      const background = pair?.background ?? theme.diff.background;
+      const baseBackground = pair?.background ?? theme.diff.background;
+      const background = highlight(baseBackground);
       node.fg = foreground;
       node.bg = background;
 
@@ -432,9 +901,11 @@ export class DiffView extends BoxRenderable {
           // Prefixes are generated gutters, never captured source text.
           text: cell.prefix.replaceAll(" | ", "   "),
           bg: RGBA.fromHex(
-            cell.role === "addition" || cell.role === "deletion"
-              ? diffGutterBackground(theme, cell.role)
-              : theme.surface,
+            highlight(
+              cell.role === "addition" || cell.role === "deletion"
+                ? diffGutterBackground(theme, cell.role)
+                : theme.surface,
+            ),
           ),
           fg: RGBA.fromHex(changed ? foreground : theme.diff.lineNumber),
         },
@@ -451,7 +922,9 @@ export class DiffView extends BoxRenderable {
                 this.changes.get(cell.line) ?? [],
               ).map((span) => {
                 const actualBackground =
-                  span.changed && pair ? pair.spanBackground : background;
+                  span.changed && pair
+                    ? highlight(pair.spanBackground)
+                    : background;
 
                 return {
                   __isChunk: true as const,
@@ -460,7 +933,9 @@ export class DiffView extends BoxRenderable {
                     readableTokenColor(
                       span.color,
                       foreground,
-                      actualBackground,
+                      span.changed && pair
+                        ? pair.spanBackground
+                        : baseBackground,
                     ),
                   ),
                   bg: RGBA.fromHex(actualBackground),
@@ -475,6 +950,22 @@ export class DiffView extends BoxRenderable {
               },
             ]),
       ]);
+    }
+
+    // Comment boxes are rebuilt only for layout/state changes; recolor in place.
+    for (const box of this.commentBoxes) {
+      box.borderColor = theme.navigation.foreground;
+      box.backgroundColor = theme.surface;
+    }
+    for (const node of this.commentText) {
+      node.fg = theme.text;
+      node.bg = theme.surface;
+    }
+    if (this.editor) {
+      this.editor.backgroundColor = theme.background;
+      this.editor.textColor = theme.text;
+      this.editor.focusedBackgroundColor = theme.background;
+      this.editor.focusedTextColor = theme.text;
     }
   }
 

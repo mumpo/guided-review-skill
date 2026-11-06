@@ -11,6 +11,7 @@ import {
   setRendererCapabilities,
 } from "@opentui/core/testing";
 import { MarkdownView } from "./markdown-view";
+import { CursorText } from "./cursor-text";
 import { ExplanationView } from "./explanation-view";
 import { highlightSource, languageForFence } from "./highlight";
 import { themes } from "./theme";
@@ -132,8 +133,7 @@ for (const theme of Object.values(themes)) {
         .getChildren()
         .find(
           (node) =>
-            node instanceof TextRenderable &&
-            typeof node.content !== "string" &&
+            node instanceof CursorText &&
             node.content.chunks.map((chunk) => chunk.text).join("") === source,
         );
 

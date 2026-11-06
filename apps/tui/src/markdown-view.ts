@@ -4,7 +4,6 @@ import {
   RGBA,
   StyledText,
   TextAttributes,
-  TextRenderable,
 } from "@opentui/core";
 import { Lexer, type Links, type Token, type Tokens } from "marked";
 import {
@@ -14,6 +13,7 @@ import {
 } from "./highlight";
 import { sessionHighlights, type SyntaxService } from "./highlight-service";
 import type { Theme, ThemeName } from "./theme";
+import { CursorText } from "./cursor-text";
 
 type Run = {
   text: string;
@@ -89,7 +89,7 @@ export function closedFence(token: Tokens.Code): boolean {
 export class MarkdownView extends BoxRenderable {
   private controller = new AbortController();
   private painted: {
-    node: TextRenderable;
+    node: CursorText;
     runs: Run[];
     code: boolean;
     syntax?: Record<ThemeName, SyntaxSpan[][]>;
@@ -132,7 +132,7 @@ export class MarkdownView extends BoxRenderable {
   }
 
   private text(parent: BoxRenderable, runs: Run[], code = false) {
-    const node = new TextRenderable(this.renderer, {
+    const node = new CursorText(this.renderer, {
       width: "100%",
       minWidth: 0,
       flexShrink: 0,
@@ -204,7 +204,7 @@ export class MarkdownView extends BoxRenderable {
             });
 
             row.add(prefix);
-            this.text(prefix, [{ text: marker }]);
+            this.text(prefix, [{ text: marker }]).cursorEnabled = false;
 
             const body = new BoxRenderable(this.renderer, {
               flexGrow: 1,
@@ -251,6 +251,7 @@ export class MarkdownView extends BoxRenderable {
     this.backgroundColor = theme.background;
 
     for (const { node, runs, code, syntax } of this.painted) {
+      node.setCursorTheme(theme.name);
       const background = code
         ? theme.markdown.codeBackground
         : theme.background;

@@ -1,3 +1,4 @@
+import { cursorBackground } from "./cursor-highlight";
 import { sessionHighlights } from "./highlight-service";
 import { expect, test } from "bun:test";
 import { RGBA, TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
@@ -605,7 +606,10 @@ test("wrapped span backgrounds survive scrolling, resize and live layout/theme c
             const role = span.text.includes("aaaa") ? "deletion" : "addition";
 
             expect(
-              span.bg.equals(RGBA.fromHex(theme.diff[role].spanBackground)),
+              [
+                theme.diff[role].spanBackground,
+                cursorBackground(theme.diff[role].spanBackground, theme.name),
+              ].some((background) => span.bg.equals(RGBA.fromHex(background))),
             ).toBe(true);
             expect(
               span.fg.equals(
@@ -760,7 +764,7 @@ test("file headers replace Git metadata with counts and collapse independently a
         expect(ui.captureCharFrame()).toContain("src/greeting.ts");
         expect(ui.captureCharFrame()).toContain("+2 -2");
 
-        await ui.mockInput.pressKeys(["c"]);
+        await ui.mockInput.pressKeys(["z"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 

@@ -54,7 +54,7 @@ test("summary separates metadata from the unlabeled description in both themes a
           true,
         );
 
-        await ui.mockInput.pressKeys(["j"]);
+        await ui.mockInput.pressKeys([KeyCodes.ARROW_DOWN]);
         await ui.renderOnce();
 
         const scrollTop = body.scrollTop;
@@ -178,7 +178,7 @@ test("live appearance changes preserve page, scroll position, and resizing", asy
     const apply = mountReview(ui.renderer, review);
 
     await startTheme(ui.renderer, "auto", apply);
-    await ui.mockInput.pressKeys(["n", "j", "j", "j", "j", "j"]);
+    await ui.mockInput.pressKeys(["n", ...Array(5).fill(KeyCodes.ARROW_DOWN)]);
     await ui.renderOnce();
 
     const before = ui.captureCharFrame();
@@ -389,13 +389,21 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
     expect(ui.captureCharFrame()).toContain("Narrative line 1:");
     expect(ui.captureCharFrame()).not.toContain("Narrative line 60:");
 
-    await ui.mockInput.pressKeys(["j", KeyCodes.ARROW_DOWN, "\u001b[6~"]);
+    await ui.mockInput.pressKeys([
+      KeyCodes.ARROW_DOWN,
+      KeyCodes.ARROW_DOWN,
+      "\u001b[6~",
+    ]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).not.toContain("Narrative line 1:");
     expect(ui.captureCharFrame()).toContain("q/Ctrl+C: quit");
 
-    await ui.mockInput.pressKeys(["\u001b[5~", "k", KeyCodes.ARROW_UP]);
+    await ui.mockInput.pressKeys([
+      "\u001b[5~",
+      KeyCodes.ARROW_UP,
+      KeyCodes.ARROW_UP,
+    ]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Narrative line 1:");
@@ -415,7 +423,7 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
   }
 });
 
-test("Vim motions scroll by line and half viewport and navigate bounded sections", async () => {
+test("arrows scroll by line, control motions scroll half viewport, and section navigation is bounded", async () => {
   for (const theme of Object.values(themes)) {
     for (const mode of ["inline", "side-by-side"] as const) {
       const review = await loadReview(fixture);
@@ -444,11 +452,11 @@ test("Vim motions scroll by line and half viewport and navigate bounded sections
 
         expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
 
-        await press("j");
+        await press(KeyCodes.ARROW_DOWN);
 
         expect(body.scrollTop).toBe(1);
 
-        await press("k");
+        await press(KeyCodes.ARROW_UP);
 
         expect(body.scrollTop).toBe(0);
 
