@@ -2,7 +2,7 @@ import type { CliRenderer } from "@opentui/core";
 import {
   type Theme,
   type ThemePreference,
-  themeForMode,
+  type ThemeName,
   themes,
 } from "./theme";
 
@@ -14,6 +14,10 @@ export async function startTheme(
   >,
   preference: ThemePreference,
   apply: (theme: Theme) => void,
+  automatic: { lightTheme: ThemeName; darkTheme: ThemeName } = {
+    lightTheme: "github-light",
+    darkTheme: "github-dark",
+  },
 ): Promise<void> {
   if (preference !== "auto") {
     if (!renderer.isDestroyed) apply(themes[preference]);
@@ -21,11 +25,14 @@ export async function startTheme(
     return;
   }
 
+  const forMode = (mode: "light" | "dark" | null) =>
+    themes[mode === "light" ? automatic.lightTheme : automatic.darkTheme];
+
   let ready = false;
   let latest = renderer.themeMode;
   const onMode = (mode: "light" | "dark") => {
     latest = mode;
-    if (ready && !renderer.isDestroyed) apply(themeForMode(mode));
+    if (ready && !renderer.isDestroyed) apply(forMode(mode));
   };
 
   renderer.on("theme_mode", onMode);
@@ -33,5 +40,5 @@ export async function startTheme(
 
   const detected = latest ?? (await renderer.waitForThemeMode(300));
   ready = true;
-  if (!renderer.isDestroyed) apply(themeForMode(latest ?? detected));
+  if (!renderer.isDestroyed) apply(forMode(latest ?? detected));
 }

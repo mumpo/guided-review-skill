@@ -36,24 +36,24 @@ test("CLI supports both theme forms, option order, help, and escaped paths", () 
 
 test("user configuration uses XDG or the home fallback", () => {
   expect(configPath({}, "/home/test")).toBe(
-    "/home/test/.config/guided-review/config.json",
+    "/home/test/.config/guided-review/config.toml",
   );
   expect(configPath({ XDG_CONFIG_HOME: "/custom" }, "/home/test")).toBe(
-    "/custom/guided-review/config.json",
+    "/custom/guided-review/config.toml",
   );
   expect(configPath({ XDG_CONFIG_HOME: "" }, "/home/test")).toBe(
-    "/home/test/.config/guided-review/config.json",
+    "/home/test/.config/guided-review/config.toml",
   );
 });
 
 test("theme precedence is CLI, environment, config, then auto", async () => {
-  const missing = join(temp, "missing.json");
+  const missing = join(temp, "missing.toml");
 
   expect(await loadThemePreference(undefined, {}, missing)).toBe("auto");
 
-  const path = join(temp, "valid.json");
+  const path = join(temp, "valid.toml");
 
-  await writeFile(path, '{"theme":"github-light"}');
+  await writeFile(path, '[tui]\ntheme = "github-light"');
 
   expect(await loadThemePreference(undefined, {}, path)).toBe("github-light");
 
@@ -62,21 +62,21 @@ test("theme precedence is CLI, environment, config, then auto", async () => {
   expect(await loadThemePreference(undefined, env, path)).toBe("github-dark");
   expect(await loadThemePreference("auto", env, path)).toBe("auto");
 
-  await writeFile(path, "{}");
+  await writeFile(path, "");
 
   expect(await loadThemePreference(undefined, {}, path)).toBe("auto");
 });
 
 test("invalid configuration is actionable even when a higher priority source overrides it", async () => {
-  const path = join(temp, "invalid.json");
+  const path = join(temp, "invalid.toml");
 
   for (const content of [
     "{",
     "null",
     "[]",
-    '{"theme":"blue"}',
-    '{"theme":null}',
-    '{"them":"auto"}',
+    '[tui]\ntheme = "blue"',
+    "[tui]\ntheme = false",
+    '[tui]\nthem = "auto"',
   ]) {
     await writeFile(path, content);
 
@@ -94,10 +94,10 @@ test("invalid configuration is actionable even when a higher priority source ove
       loadThemePreference(
         "github-dark",
         { GUIDED_REVIEW_THEME: value },
-        join(temp, "missing.json"),
+        join(temp, "missing.toml"),
       ),
     ).rejects.toThrow(
-      "GUIDED_REVIEW_THEME: expected auto, github-light, or github-dark",
+      "GUIDED_REVIEW_THEME: expected auto, github-light, github-dark",
     );
   }
 });
@@ -121,16 +121,21 @@ test("diff mode accepts both CLI forms and rejects missing, invalid, and duplica
 
 test("shared configuration resolves diff mode independently and validates overridden values", async () => {
   const { loadPreferences } = await import("./config");
-  const path = join(temp, "diff.json");
+  const path = join(temp, "diff.toml");
 
-  expect(await loadPreferences({}, {}, join(temp, "missing.json"))).toEqual({
+  expect(
+    await loadPreferences({}, {}, join(temp, "missing.toml")),
+  ).toMatchObject({
     theme: "auto",
     diffMode: "auto",
   });
 
-  await writeFile(path, '{"theme":"github-light","diffMode":"side-by-side"}');
+  await writeFile(
+    path,
+    '[tui]\ntheme = "github-light"\ndiff_mode = "side-by-side"',
+  );
 
-  expect(await loadPreferences({}, {}, path)).toEqual({
+  expect(await loadPreferences({}, {}, path)).toMatchObject({
     theme: "github-light",
     diffMode: "side-by-side",
   });
@@ -140,13 +145,13 @@ test("shared configuration resolves diff mode independently and validates overri
       { GUIDED_REVIEW_THEME: "github-dark" },
       path,
     ),
-  ).toEqual({ theme: "github-dark", diffMode: "auto" });
+  ).toMatchObject({ theme: "github-dark", diffMode: "auto" });
 
-  for (const value of [null, "split", false, 1]) {
-    await writeFile(path, JSON.stringify({ diffMode: value }));
+  for (const value of ["split", false, 1]) {
+    await writeFile(path, `[tui]\ndiff_mode = ${JSON.stringify(value)}`);
 
     await expect(
       loadPreferences({ diffMode: "inline" }, {}, path),
-    ).rejects.toThrow("diffMode: expected auto, inline, or side-by-side");
+    ).rejects.toThrow("tui.diff_mode: expected auto, inline, side-by-side");
   }
 });

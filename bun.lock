@@ -10,6 +10,10 @@
         "typescript": "5.9.3",
       },
     },
+    "apps/launcher": {
+      "name": "@guided-review/launcher",
+      "version": "0.0.0",
+    },
     "apps/tui": {
       "name": "@guided-review/tui",
       "version": "0.0.0",
@@ -29,6 +33,10 @@
     },
     "packages/core": {
       "name": "@guided-review/core",
+      "version": "0.0.0",
+    },
+    "packages/preferences": {
+      "name": "@guided-review/preferences",
       "version": "0.0.0",
     },
   },
@@ -54,6 +62,10 @@
     "@guided-review/collector": ["@guided-review/collector@workspace:packages/collector"],
 
     "@guided-review/core": ["@guided-review/core@workspace:packages/core"],
+
+    "@guided-review/launcher": ["@guided-review/launcher@workspace:apps/launcher"],
+
+    "@guided-review/preferences": ["@guided-review/preferences@workspace:packages/preferences"],
 
     "@guided-review/tui": ["@guided-review/tui@workspace:apps/tui"],
 

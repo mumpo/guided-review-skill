@@ -1,35 +1,23 @@
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import type { DiffMode } from "./diff";
-import type { ThemePreference } from "./theme";
+import type {
+  DiffMode,
+  ThemePreference,
+} from "../../../packages/preferences/src";
+import { parseTheme, parseDiffMode } from "../../../packages/preferences/src";
+export {
+  configPath,
+  loadPreferences,
+  loadThemePreference,
+} from "../../../packages/preferences/src";
 
 export const usage =
-  "Usage: bun run dev:tui [--theme auto|github-light|github-dark] [--diff-mode auto|inline|side-by-side] <path/to/review.json>";
-
-function parseTheme(value: unknown, source: string): ThemePreference {
-  if (value === "auto" || value === "github-light" || value === "github-dark")
-    return value;
-
-  throw new Error(
-    `${source}: expected auto, github-light, or github-dark; received ${JSON.stringify(value)}.`,
-  );
-}
-
-function parseDiffMode(value: unknown, source: string): DiffMode {
-  if (value === "auto" || value === "inline" || value === "side-by-side")
-    return value;
-
-  throw new Error(
-    `${source}: expected auto, inline, or side-by-side; received ${JSON.stringify(value)}.`,
-  );
-}
+  "Usage: bun run dev:tui [--config PATH] [--theme auto|github-light|github-dark] [--diff-mode auto|inline|side-by-side] <path/to/review.json>";
 
 export function parseArgs(args: string[]):
   | { help: true }
   | {
       help: false;
       path: string;
+      config?: string;
       theme?: ThemePreference;
       diffMode?: DiffMode;
     } {
@@ -37,6 +25,7 @@ export function parseArgs(args: string[]):
     return { help: true };
 
   let path: string | undefined;
+  let config: string | undefined;
   let theme: ThemePreference | undefined;
   let diffMode: DiffMode | undefined;
   let positionalOnly = false;
@@ -47,7 +36,18 @@ export function parseArgs(args: string[]):
       positionalOnly = true;
       continue;
     }
-    if (!positionalOnly && (arg === "--theme" || arg.startsWith("--theme="))) {
+    if (
+      !positionalOnly &&
+      (arg === "--config" || arg.startsWith("--config="))
+    ) {
+      if (config !== undefined) throw new Error(`Duplicate --config. ${usage}`);
+      config = arg === "--config" ? args[++i] : arg.slice(9);
+      if (!config || config.startsWith("--"))
+        throw new Error(`Missing --config path. ${usage}`);
+    } else if (
+      !positionalOnly &&
+      (arg === "--theme" || arg.startsWith("--theme="))
+    ) {
       if (theme !== undefined) throw new Error(`Duplicate --theme. ${usage}`);
 
       theme = parseTheme(
@@ -76,79 +76,8 @@ export function parseArgs(args: string[]):
   return {
     help: false,
     path,
+    ...(config === undefined ? {} : { config }),
     theme,
     ...(diffMode === undefined ? {} : { diffMode }),
   };
-}
-
-export function configPath(
-  env: NodeJS.ProcessEnv = process.env,
-  home = homedir(),
-): string {
-  return join(
-    env.XDG_CONFIG_HOME || join(home, ".config"),
-    "guided-review",
-    "config.json",
-  );
-}
-
-export async function loadPreferences(
-  cli: { theme?: ThemePreference; diffMode?: DiffMode },
-  env: NodeJS.ProcessEnv = process.env,
-  path = configPath(env),
-): Promise<{ theme: ThemePreference; diffMode: DiffMode }> {
-  let contents: string;
-  let configured: ThemePreference | undefined;
-  let diffMode: DiffMode | undefined;
-  try {
-    contents = await readFile(path, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw new Error(
-        `Cannot read viewer configuration ${path}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-
-    contents = "{}";
-  }
-
-  try {
-    const value: unknown = JSON.parse(contents);
-    if (value === null || typeof value !== "object" || Array.isArray(value))
-      throw new Error("expected a JSON object");
-
-    const config = value as Record<string, unknown>;
-    const unknown = Object.keys(config).filter(
-      (key) => key !== "theme" && key !== "diffMode",
-    );
-    if (unknown.length)
-      throw new Error(`unknown configuration key(s): ${unknown.join(", ")}`);
-    if (Object.hasOwn(config, "theme"))
-      configured = parseTheme(config.theme, "theme");
-    if (Object.hasOwn(config, "diffMode"))
-      diffMode = parseDiffMode(config.diffMode, "diffMode");
-  } catch (error) {
-    throw new Error(
-      `Invalid viewer configuration ${path}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
-  const environment =
-    env.GUIDED_REVIEW_THEME === undefined
-      ? undefined
-      : parseTheme(env.GUIDED_REVIEW_THEME, "GUIDED_REVIEW_THEME");
-
-  return {
-    theme: cli.theme ?? environment ?? configured ?? "auto",
-    diffMode: cli.diffMode ?? diffMode ?? "auto",
-  };
-}
-
-/** Compatibility helper for callers that only need the appearance preference. */
-export async function loadThemePreference(
-  cli: ThemePreference | undefined,
-  env: NodeJS.ProcessEnv = process.env,
-  path = configPath(env),
-): Promise<ThemePreference> {
-  return (await loadPreferences({ theme: cli }, env, path)).theme;
 }
