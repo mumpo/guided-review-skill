@@ -1,5 +1,6 @@
+import { cursorBackground } from "./cursor-highlight";
 import { expect, test } from "bun:test";
-import { RGBA, ScrollBoxRenderable, TextAttributes } from "@opentui/core";
+import { RGBA, ScrollBoxRenderable } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
 import { DiffView } from "./diff-view";
 import { MarkdownView } from "./markdown-view";
@@ -52,11 +53,7 @@ test("late Markdown syntax colors preserve the selected logical line and its ori
     code.setCursorLine(1);
     await ui.renderOnce();
 
-    const selected = () =>
-      code.content.chunks
-        .filter((chunk) => (chunk.attributes ?? 0) & TextAttributes.UNDERLINE)
-        .map((chunk) => chunk.text)
-        .join("");
+    const selected = () => code.selectedText;
     expect(selected()).toBe(
       'const second = "Unicode 🐱 wraps to another row";',
     );
@@ -73,7 +70,16 @@ test("late Markdown syntax colors preserve the selected logical line and its ori
       ui
         .captureSpans()
         .lines.filter((line) =>
-          line.spans.some((span) => span.attributes & TextAttributes.UNDERLINE),
+          line.spans.some((span) =>
+            span.bg.equals(
+              RGBA.fromHex(
+                cursorBackground(
+                  themes["github-light"].markdown.codeBackground,
+                  "github-light",
+                ),
+              ),
+            ),
+          ),
         ).length,
     ).toBeGreaterThan(1);
     code.setCursorLine();

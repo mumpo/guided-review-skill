@@ -1,3 +1,4 @@
+import { cursorBackground } from "./cursor-highlight";
 import { expect, test } from "bun:test";
 import {
   BoxRenderable,
@@ -27,11 +28,7 @@ function cursorText(root: Renderable): string {
   const selected: string[] = [];
   const walk = (node: Renderable) => {
     if (node instanceof CursorText) {
-      selected.push(
-        ...node.content.chunks
-          .filter((chunk) => (chunk.attributes ?? 0) & TextAttributes.UNDERLINE)
-          .map((chunk) => chunk.text),
-      );
+      selected.push(node.selectedText);
     }
     for (const child of node.getChildren()) walk(child);
   };
@@ -39,6 +36,25 @@ function cursorText(root: Renderable): string {
   walk(root);
 
   return selected.join("");
+}
+
+function cursorHighlightRows(
+  ui: Awaited<ReturnType<typeof createTestRenderer>>,
+  theme = themes["github-dark"],
+) {
+  const backgrounds = [
+    theme.background,
+    theme.markdown.codeBackground,
+    theme.diff.addition.background,
+    theme.diff.deletion.background,
+  ].map((base) => RGBA.fromHex(cursorBackground(base, theme.name)));
+  return ui
+    .captureSpans()
+    .lines.filter((line) =>
+      line.spans.some((span) =>
+        backgrounds.some((background) => span.bg.equals(background)),
+      ),
+    );
 }
 
 for (const theme of Object.values(themes)) {
@@ -94,9 +110,7 @@ for (const theme of Object.values(themes)) {
             .find((span) => span.text === "bold");
           if (text === "First bold line.") {
             expect((bold?.attributes ?? 0) & TextAttributes.BOLD).toBeTruthy();
-            expect(
-              (bold?.attributes ?? 0) & TextAttributes.UNDERLINE,
-            ).toBeTruthy();
+            expect((bold?.attributes ?? 0) & TextAttributes.UNDERLINE).toBe(0);
           } else if (text === "Second line.") {
             expect((bold?.attributes ?? 0) & TextAttributes.BOLD).toBeTruthy();
             expect((bold?.attributes ?? 0) & TextAttributes.UNDERLINE).toBe(0);
@@ -106,11 +120,7 @@ for (const theme of Object.values(themes)) {
         const keyword = ui
           .captureSpans()
           .lines.flatMap((line) => line.spans)
-          .find(
-            (span) =>
-              span.text === "const" &&
-              span.attributes & TextAttributes.UNDERLINE,
-          );
+          .find((span) => span.text === "const");
         expect(keyword).toBeDefined();
         expect(keyword?.fg.equals(RGBA.fromHex(theme.markdown.code))).toBe(
           false,
@@ -127,13 +137,25 @@ for (const theme of Object.values(themes)) {
         await press("j");
 
         expect(cursorText(ui.renderer.root)).toBe("");
-        expect(ui.captureCharFrame()).toContain("▸");
-        await press("c");
+        expect(
+          cursorHighlightRows(
+            ui,
+            themes[
+              theme.name === "github-light" ? "github-dark" : "github-light"
+            ],
+          ).length,
+        ).toBeGreaterThan(0);
+        await press("c", " ");
+
+        expect(
+          Boolean(ui.renderer.root.findDescendantById("comment-editor")),
+        ).toBe(false);
+        await press("j", "c");
 
         expect(
           Boolean(ui.renderer.root.findDescendantById("comment-editor")),
         ).toBe(true);
-        await press("\u001b[27u", "k");
+        await press("\u001b[27u", "k", "k");
 
         expect(cursorText(ui.renderer.root)).toBe("const beta = 2;");
         expect(ui.captureCharFrame()).not.toContain("▸");
@@ -182,11 +204,7 @@ test("wrapped Unicode Markdown keeps its logical line selected and scrolls incre
     expect(selected).toContain("Wrapped 👩‍💻 bold words");
     expect(selected).not.toContain("Narrative");
     expect(body.scrollTop).toBeLessThan(10);
-    const wrappedRows = ui
-      .captureSpans()
-      .lines.filter((line) =>
-        line.spans.some((span) => span.attributes & TextAttributes.UNDERLINE),
-      );
+    const wrappedRows = cursorHighlightRows(ui);
     expect(wrappedRows.length).toBeGreaterThan(2);
 
     await ui.mockInput.pressKeys(["j", "j", "j"]);
@@ -202,7 +220,9 @@ test("wrapped Unicode Markdown keeps its logical line selected and scrolls incre
     await ui.renderOnce();
 
     expect(cursorText(ui.renderer.root)).toBe("");
-    expect(ui.captureCharFrame()).toContain("▸");
+    expect(
+      cursorHighlightRows(ui, themes["github-light"]).length,
+    ).toBeGreaterThan(0);
     expect(body.scrollTop).toBeGreaterThan(20);
     await ui.mockInput.pressKeys(["k"]);
     await ui.renderOnce();
@@ -265,7 +285,7 @@ test("summary Markdown uses the same cursor and cannot open a source comment", a
   }
 });
 
-test("collapsing files leaves a narrative cursor in place and returns a removed diff cursor to text", async () => {
+test("collapsing files leaves a narrative cursor in place and folded headers stay navigable", async () => {
   const data = review("Last narrative line");
   data.snapshot.sections[0].references = [{ kind: "file", fileId: "greeting" }];
   data.analysis = analyzeDiffs(data.snapshot);
@@ -279,7 +299,7 @@ test("collapsing files leaves a narrative cursor in place and returns a removed 
       await ui.renderOnce();
       await ui.renderOnce();
     };
-    await press("n", "j", "z", "j", "c");
+    await press("n", "j", "z", "c");
 
     const body = ui.renderer.root.findDescendantById(
       "body",
@@ -289,18 +309,21 @@ test("collapsing files leaves a narrative cursor in place and returns a removed 
     expect(Boolean(ui.renderer.root.findDescendantById("comment-editor"))).toBe(
       false,
     );
-    await press("z", "j");
+    await press("j", "z", "j");
 
     expect(cursorText(ui.renderer.root)).toBe("");
-    expect(ui.captureCharFrame()).toContain("▸");
+    expect(cursorHighlightRows(ui).length).toBeGreaterThan(0);
     await press("z");
 
-    expect(cursorText(ui.renderer.root)).toBe("Last narrative line");
+    expect(cursorText(ui.renderer.root)).toBe("");
     await press("c");
 
     expect(Boolean(ui.renderer.root.findDescendantById("comment-editor"))).toBe(
       false,
     );
+    await press("k");
+
+    expect(cursorText(ui.renderer.root)).toBe("Last narrative line");
   } finally {
     await sessionHighlights(ui.renderer).settled();
     await ui.dispose();

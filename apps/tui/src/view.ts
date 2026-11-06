@@ -63,7 +63,7 @@ export function mountReview(
     flexDirection: "column",
     flexShrink: 0,
   });
-  let narrativeText: TextRenderable[] = [];
+  let narrativeText: CursorText[] = [];
   let narrativeMarkdown: MarkdownView[] = [];
   let prHeader: PullRequestHeader | undefined;
   let descriptionSeparator: BoxRenderable | undefined;
@@ -79,6 +79,7 @@ export function mountReview(
       marginBottom: 1,
     });
 
+    node.setCursorTheme(theme.name);
     narrative.add(node);
     narrativeText.push(node);
   }
@@ -127,6 +128,7 @@ export function mountReview(
     narrative.backgroundColor = theme.background;
 
     for (const node of narrativeText) {
+      node.setCursorTheme(theme.name);
       node.fg = theme.markdown.text;
       node.bg = theme.background;
     }

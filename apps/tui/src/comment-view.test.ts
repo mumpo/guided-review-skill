@@ -47,7 +47,7 @@ for (const theme of Object.values(themes)) {
             });
           },
         );
-        await ui.mockInput.pressKeys(["n", "j", "j", "c"]);
+        await ui.mockInput.pressKeys(["n", "j", "j", "j", "c"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -72,9 +72,7 @@ for (const theme of Object.values(themes)) {
           .lines[source].spans.find((span) =>
             span.text.includes(mode === "inline" ? "hello" : "world"),
           );
-        expect(
-          (selected?.attributes ?? 0) & TextAttributes.UNDERLINE,
-        ).toBeTruthy();
+        expect((selected?.attributes ?? 0) & TextAttributes.UNDERLINE).toBe(0);
         expect(editor()).toBeInstanceOf(TextareaRenderable);
         if (mode === "side-by-side") {
           const sourceText = ui.captureCharFrame().split("\n")[source];
@@ -93,7 +91,7 @@ for (const theme of Object.values(themes)) {
         await ui.renderOnce();
 
         expect(Boolean(editor())).toBe(false);
-        await ui.mockInput.pressKeys(["n", "p", "j", "j", "c"]);
+        await ui.mockInput.pressKeys(["n", "p", "j", "j", "j", "c"]);
         await ui.renderOnce();
 
         expect(editor().plainText).toBe(body);
@@ -133,7 +131,7 @@ for (const theme of Object.values(themes)) {
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("me: Posted body");
-        await ui.mockInput.pressKeys(["j", "j", "c"]);
+        await ui.mockInput.pressKeys(["j", "j", "j", "c"]);
         await ui.renderOnce();
 
         expect(editor().plainText).toBe("");
@@ -161,7 +159,7 @@ test("split cursor skips metadata, switches sides with Space, and preserves sour
         return posted;
       },
     );
-    await ui.mockInput.pressKeys(["n", "j", "j", " ", "c"]);
+    await ui.mockInput.pressKeys(["n", "j", "j", "j", " ", "c"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -217,7 +215,7 @@ test("empty and failed submissions keep the editor and draft; Esc during publish
       ui.renderer.root.findDescendantById(
         "comment-editor",
       ) as TextareaRenderable;
-    await ui.mockInput.pressKeys(["n", "j", "j", "c", "\u0013"]);
+    await ui.mockInput.pressKeys(["n", "j", "j", "j", "c", "\u0013"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -248,7 +246,7 @@ test("cursor scrolls into view and collapsed files and non-source sections canno
 
   try {
     mountReview(ui.renderer, review);
-    await ui.mockInput.pressKeys(["n", ...Array(61).fill("j")]);
+    await ui.mockInput.pressKeys(["n", ...Array(62).fill("j")]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -256,7 +254,7 @@ test("cursor scrolls into view and collapsed files and non-source sections canno
       "body",
     ) as ScrollBoxRenderable;
     expect(body.scrollTop).toBeGreaterThan(0);
-    expect(ui.captureCharFrame()).toContain("▸");
+    expect(ui.captureCharFrame()).not.toContain("▸");
     await ui.mockInput.pressKeys(["z", "c"]);
     await ui.renderOnce();
 
@@ -286,7 +284,7 @@ test("automatic layout changes retain old-context editor text, focus, and source
 
   try {
     mountReview(ui.renderer, data());
-    await ui.mockInput.pressKeys(["n", "j", "j", "j", " ", "c"]);
+    await ui.mockInput.pressKeys(["n", "j", "j", "j", "j", " ", "c"]);
     await ui.mockInput.typeText("context draft");
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
@@ -351,12 +349,12 @@ test("renamed and deleted files publish correct paths and comments follow overla
       );
       const editor = () =>
         ui.renderer.root.findDescendantById("comment-editor");
-      await ui.mockInput.pressKeys(["n", "j", "j", "c"]);
+      await ui.mockInput.pressKeys(["n", "j", "j", "j", "c"]);
       await ui.mockInput.typeText("First comment");
       await ui.mockInput.pressKeys(["\u0013"]);
       await sessionHighlights(ui.renderer).settled();
       await ui.waitFor(() => !editor());
-      await ui.mockInput.pressKeys(["n", "j", "j", "c"]);
+      await ui.mockInput.pressKeys(["n", "j", "j", "j", "c"]);
       await ui.mockInput.typeText("Second comment");
       await ui.mockInput.pressKeys(["\u0013"]);
       await ui.waitFor(() => !editor());

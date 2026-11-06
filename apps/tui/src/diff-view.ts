@@ -39,11 +39,13 @@ import {
   type PublishedComment,
   type PublishComment,
 } from "./comments";
+import { cursorBackground } from "./cursor-highlight";
 
 interface CursorRow {
   node: BoxRenderable | TextRenderable;
   file: string;
   targets: CommentTarget[];
+  header?: boolean;
 }
 
 interface Draft {
@@ -61,8 +63,7 @@ export class DiffView extends BoxRenderable {
   private changes: ChangedSpans = new Map();
   private preference: DiffMode = "auto";
   private palette: Theme;
-  private painted: { node: TextRenderable; cell: DiffCell; file?: string }[] =
-    [];
+  private painted: { node: TextRenderable; cell: DiffCell }[] = [];
   private logical: {
     node: BoxRenderable | TextRenderable;
     file: string;
@@ -81,8 +82,14 @@ export class DiffView extends BoxRenderable {
   private signature = "";
   private anchorEpoch = 0;
   private fills: { node: BoxRenderable; role: RowRole }[] = [];
+  private cursorBoxes: {
+    box: BoxRenderable;
+    cell: DiffCell;
+    file: string;
+  }[] = [];
   private cursorRows: CursorRow[] = [];
   private selected?: CommentTarget;
+  private selectedHeader?: string;
   private preferredSide: "old" | "new" = "new";
   private cursorActive = true;
   private active?: CommentTarget;
@@ -112,6 +119,7 @@ export class DiffView extends BoxRenderable {
     this.captureEditor();
     this.active = undefined;
     this.selected = undefined;
+    this.selectedHeader = undefined;
     this.preferredSide = "new";
     this.anchorEpoch++;
     this.files = files;
@@ -231,14 +239,30 @@ export class DiffView extends BoxRenderable {
     if (!this.isDestroyed) this.preserve(() => this.rebuild());
   }
 
+  private visibleCursorRows() {
+    return this.cursorRows.filter(
+      (row) => row.header || !this.collapsed.has(row.file),
+    );
+  }
+
+  private matchesCursor(row: CursorRow) {
+    return row.header
+      ? this.selectedHeader === row.file
+      : row.targets.some((target) => this.isSelected(target));
+  }
+
+  private selectRow(row?: CursorRow) {
+    this.selectedHeader = row?.header ? row.file : undefined;
+    this.selected = row?.header
+      ? undefined
+      : (row?.targets.find((target) => target.side === this.preferredSide) ??
+        row?.targets[0]);
+  }
+
   get hasCursor() {
     return (
       this.cursorActive &&
-      this.cursorRows.some(
-        (row) =>
-          !this.collapsed.has(row.file) &&
-          row.targets.some((target) => this.isSelected(target)),
-      )
+      this.visibleCursorRows().some((row) => this.matchesCursor(row))
     );
   }
 
@@ -250,12 +274,10 @@ export class DiffView extends BoxRenderable {
   }
 
   focusCursor() {
-    const row = this.cursorRows.find((row) => !this.collapsed.has(row.file));
+    const row = this.visibleCursorRows()[0];
     if (!row) return false;
 
-    this.selected =
-      row.targets.find((target) => target.side === this.preferredSide) ??
-      row.targets[0];
+    this.selectRow(row);
     this.cursorActive = true;
     this.setTheme(this.palette);
     this.revealCursor();
@@ -264,16 +286,14 @@ export class DiffView extends BoxRenderable {
   }
 
   moveCursor(direction: number): boolean {
-    const rows = this.cursorRows.filter((row) => !this.collapsed.has(row.file));
+    const rows = this.visibleCursorRows();
     if (!rows.length) {
-      this.selected = undefined;
+      this.selectRow();
       this.setTheme(this.palette);
       return false;
     }
 
-    const current = rows.findIndex((row) =>
-      row.targets.some((target) => this.isSelected(target)),
-    );
+    const current = rows.findIndex((row) => this.matchesCursor(row));
     const index =
       current < 0
         ? 0
@@ -282,10 +302,7 @@ export class DiffView extends BoxRenderable {
       this.revealCursor();
       return false;
     }
-    this.selected =
-      rows[index].targets.find(
-        (target) => target.side === this.preferredSide,
-      ) ?? rows[index].targets[0];
+    this.selectRow(rows[index]);
     this.setTheme(this.palette);
     this.revealCursor();
 
@@ -317,8 +334,8 @@ export class DiffView extends BoxRenderable {
     this.body.afterLayout(() => {
       if (signal.aborted || this.isDestroyed || !this.cursorActive) return;
 
-      const row = this.cursorRows.find((row) =>
-        row.targets.some((target) => this.isSelected(target)),
+      const row = this.visibleCursorRows().find((row) =>
+        this.matchesCursor(row),
       );
       if (!row) return;
 
@@ -392,6 +409,12 @@ export class DiffView extends BoxRenderable {
   }
 
   toggleVisibleFile() {
+    const selectedFile = this.selectedHeader ?? this.selected?.fileId;
+    if (this.cursorActive && selectedFile) {
+      this.toggleFile(selectedFile);
+      return;
+    }
+
     const top = this.body.viewport.y;
     const bottom = top + this.body.viewport.height;
     const header = this.headers.find(
@@ -419,10 +442,15 @@ export class DiffView extends BoxRenderable {
     header.chevron.content = header.content.visible ? "⌄" : "›";
     if (
       this.cursorActive &&
-      this.selected?.fileId === id &&
-      this.collapsed.has(id)
-    )
-      this.moveCursor(1);
+      (this.selectedHeader ?? this.selected?.fileId) === id
+    ) {
+      if (this.collapsed.has(id))
+        this.selectRow(
+          this.cursorRows.find((row) => row.header && row.file === id),
+        );
+      this.revealCursor();
+    }
+    this.setTheme(this.palette);
   }
 
   private fileHeader(file: FileRows) {
@@ -488,6 +516,12 @@ export class DiffView extends BoxRenderable {
     this.add(content);
     this.headers.push({ file, box, chevron, path, added, deleted, content });
     this.logical.push({ node: box, file: file.id, sources: [0] });
+    this.cursorRows.push({
+      node: box,
+      file: file.id,
+      targets: [],
+      header: true,
+    });
 
     return content;
   }
@@ -500,6 +534,7 @@ export class DiffView extends BoxRenderable {
     this.headers = [];
     this.painted = [];
     this.fills = [];
+    this.cursorBoxes = [];
     this.logical = [];
     this.cursorRows = [];
     this.commentBoxes = [];
@@ -558,19 +593,15 @@ export class DiffView extends BoxRenderable {
             flexDirection: "column",
             flexShrink: 0,
           });
-          node.add(
-            this.text(
-              {
-                text: full.prefix ? text.slice(full.prefix.length) : text,
-                prefix: full.prefix ?? "",
-                role: full.role,
-                line: full.line,
-                side: full.role === "deletion" ? "old" : "new",
-              },
-              "100%",
-              file.id,
-            ),
-          );
+          const cell: DiffCell = {
+            text: full.prefix ? text.slice(full.prefix.length) : text,
+            prefix: full.prefix ?? "",
+            role: full.role,
+            line: full.line,
+            side: full.role === "deletion" ? "old" : "new",
+          };
+          node.add(this.text(cell));
+          this.cursorBoxes.push({ box: node, cell, file: file.id });
           this.fills.push({ node, role: full.role });
         } else {
           node = new BoxRenderable(this.renderer, {
@@ -594,7 +625,12 @@ export class DiffView extends BoxRenderable {
             });
             if (cell) {
               this.fills.push({ node: pane, role: cell.role });
-              pane.add(this.text(cell, "100%", file.id));
+              pane.add(this.text(cell));
+              this.cursorBoxes.push({
+                box: pane,
+                cell,
+                file: file.id,
+              });
               if (cell.marker)
                 pane.add(
                   this.text({ text: cell.marker, prefix: "", role: "marker" }),
@@ -651,11 +687,7 @@ export class DiffView extends BoxRenderable {
       }
     });
 
-    if (
-      !this.cursorRows.some((row) =>
-        row.targets.some((target) => this.isSelected(target)),
-      )
-    ) {
+    if (!this.visibleCursorRows().some((row) => this.matchesCursor(row))) {
       // Keep the selected captured context line when inline mode hides its old cell.
       const file = this.files.find((file) => file.id === this.selected?.fileId);
       const source = file?.rows.find(
@@ -674,13 +706,10 @@ export class DiffView extends BoxRenderable {
               target.side === "new" &&
               target.line === equivalent,
           );
-      const first = this.cursorRows.find(
-        (row) => !this.collapsed.has(row.file),
-      );
-      this.selected =
-        replacement ||
-        first?.targets.find((target) => target.side === "new") ||
-        first?.targets[0];
+      if (replacement) {
+        this.selected = replacement;
+        this.selectedHeader = undefined;
+      } else this.selectRow(this.visibleCursorRows()[0]);
     }
 
     this.setTheme(this.palette);
@@ -791,7 +820,7 @@ export class DiffView extends BoxRenderable {
     }
   }
 
-  private text(cell: DiffCell, width: number | "100%" = "100%", file?: string) {
+  private text(cell: DiffCell, width: number | "100%" = "100%") {
     const node = new TextRenderable(this.renderer, {
       content: "",
       width,
@@ -800,7 +829,7 @@ export class DiffView extends BoxRenderable {
       flexShrink: 0,
     });
 
-    this.painted.push({ node, cell, file });
+    this.painted.push({ node, cell });
 
     return node;
   }
@@ -809,11 +838,14 @@ export class DiffView extends BoxRenderable {
     this.palette = theme;
     this.backgroundColor = theme.diff.background;
 
-    for (const { box, chevron, path, added, deleted } of this.headers) {
-      box.backgroundColor = theme.surface;
+    for (const { file, box, chevron, path, added, deleted } of this.headers) {
+      const background =
+        this.cursorActive && this.selectedHeader === file.id
+          ? cursorBackground(theme.surface, theme.name)
+          : theme.surface;
+      box.backgroundColor = background;
       box.borderColor = theme.muted;
-      for (const node of [chevron, path, added, deleted])
-        node.bg = theme.surface;
+      for (const node of [chevron, path, added, deleted]) node.bg = background;
 
       chevron.fg = theme.muted;
       path.fg = theme.diff.file;
@@ -828,22 +860,34 @@ export class DiffView extends BoxRenderable {
           : theme.diff.background;
     }
 
-    for (const { node, cell, file } of this.painted) {
-      const selected =
+    const selectedBoxes = this.cursorBoxes.filter(
+      ({ cell, file }) =>
         this.cursorActive &&
         this.selected &&
         cell.line &&
         cell.side === this.selected.side &&
         file === this.selected.fileId &&
         (cell.side === "old" ? cell.line.oldLine : cell.line.newLine) ===
-          this.selected.line;
-      node.attributes = selected ? TextAttributes.UNDERLINE : 0;
+          this.selected.line,
+    );
+    for (const { box } of this.cursorBoxes) {
+      const selected = selectedBoxes.some((entry) => entry.box === box);
+      if (selected)
+        box.backgroundColor = cursorBackground(box.backgroundColor, theme.name);
+    }
+
+    const selectedCells = new Set(selectedBoxes.map(({ cell }) => cell));
+    for (const { node, cell } of this.painted) {
+      const selected = selectedCells.has(cell);
+      const highlight = (background: string) =>
+        selected ? cursorBackground(background, theme.name) : background;
       const changed = cell.role === "addition" || cell.role === "deletion";
       const pair = changed
         ? theme.diff[cell.role as "addition" | "deletion"]
         : undefined;
       const foreground = pair?.foreground ?? this.foreground(cell.role);
-      const background = pair?.background ?? theme.diff.background;
+      const baseBackground = pair?.background ?? theme.diff.background;
+      const background = highlight(baseBackground);
       node.fg = foreground;
       node.bg = background;
 
@@ -855,13 +899,13 @@ export class DiffView extends BoxRenderable {
         {
           __isChunk: true,
           // Prefixes are generated gutters, never captured source text.
-          text: selected
-            ? cell.prefix.replaceAll(" | ", "   ").replace(/ $/, "▸")
-            : cell.prefix.replaceAll(" | ", "   "),
+          text: cell.prefix.replaceAll(" | ", "   "),
           bg: RGBA.fromHex(
-            cell.role === "addition" || cell.role === "deletion"
-              ? diffGutterBackground(theme, cell.role)
-              : theme.surface,
+            highlight(
+              cell.role === "addition" || cell.role === "deletion"
+                ? diffGutterBackground(theme, cell.role)
+                : theme.surface,
+            ),
           ),
           fg: RGBA.fromHex(changed ? foreground : theme.diff.lineNumber),
         },
@@ -878,7 +922,9 @@ export class DiffView extends BoxRenderable {
                 this.changes.get(cell.line) ?? [],
               ).map((span) => {
                 const actualBackground =
-                  span.changed && pair ? pair.spanBackground : background;
+                  span.changed && pair
+                    ? highlight(pair.spanBackground)
+                    : background;
 
                 return {
                   __isChunk: true as const,
@@ -887,7 +933,9 @@ export class DiffView extends BoxRenderable {
                     readableTokenColor(
                       span.color,
                       foreground,
-                      actualBackground,
+                      span.changed && pair
+                        ? pair.spanBackground
+                        : baseBackground,
                     ),
                   ),
                   bg: RGBA.fromHex(actualBackground),

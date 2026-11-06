@@ -251,6 +251,7 @@ export class MarkdownView extends BoxRenderable {
     this.backgroundColor = theme.background;
 
     for (const { node, runs, code, syntax } of this.painted) {
+      node.setCursorTheme(theme.name);
       const background = code
         ? theme.markdown.codeBackground
         : theme.background;
