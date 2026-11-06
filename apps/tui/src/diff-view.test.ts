@@ -760,7 +760,7 @@ test("file headers replace Git metadata with counts and collapse independently a
         expect(ui.captureCharFrame()).toContain("src/greeting.ts");
         expect(ui.captureCharFrame()).toContain("+2 -2");
 
-        await ui.mockInput.pressKeys(["c"]);
+        await ui.mockInput.pressKeys(["z"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 

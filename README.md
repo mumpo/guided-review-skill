@@ -142,7 +142,7 @@ Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cl
 
 The viewer opens on the PR summary with a bold title and muted PR number. The number is a native terminal hyperlink to the captured GitHub PR; activation follows your terminal's convention (usually Cmd/Ctrl-click). Terminals without hyperlink support still show the number, and the full URL remains visible below. Newly captured reviews also show a GitHub-colored Draft, Open, Merged, or Closed badge, an underlined author, commit count, and blue branch pills. Badge icons use Nerd Fonts' Octicons; select a Nerd Font in your terminal to display them. Status labels remain readable without that font. All metadata reflects collection time; older artifacts show available details without fetching or guessing missing metadata.
 
-The first page also includes captured commit IDs and coverage notices, followed by a horizontal separator and the PR description without an added heading. The generated walkthrough summary remains in the artifact but is not displayed in the TUI. An ordered section list follows the description. Each section shows its explanation and referenced real diff with file paths and old/new line numbers. Each file has a bordered header with a clickable collapse chevron and green addition/red deletion counts for the full captured file. Renames show both paths. Press `c` to toggle the first file intersecting the visible viewport; collapse state survives theme, layout, and width changes, and resets when navigating sections. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
+The first page also includes captured commit IDs and coverage notices, followed by a horizontal separator and the PR description without an added heading. The generated walkthrough summary remains in the artifact but is not displayed in the TUI. An ordered section list follows the description. Each section shows its explanation and referenced real diff with file paths and old/new line numbers. Each file has a bordered header with a clickable collapse chevron and green addition/red deletion counts for the full captured file. Renames show both paths. Press `z` to toggle the first file intersecting the visible viewport; collapse state survives theme, layout, and width changes, and resets when navigating sections. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
 
 Line references show only selected changes, with explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Raw Git metadata, hunk labels, and layout labels are hidden; separate hunks retain a blank separator. Binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
 
@@ -152,13 +152,28 @@ Line references show only selected changes, with explicit omission markers; whol
 | `p`, `h`, `←`, `Shift+Tab` | Previous section (from the first, return to summary). |
 | `s`, `Home` | Return to summary. |
 | `End` | Open the last section. |
-| `↑`/`↓`, `k`/`j`, `PageUp`/`PageDown` | Scroll the current page. |
+| `j`/`k` | Move the highlighted diff cursor down/up, scrolling it into view. On the summary, scroll by one line. |
+| `Space` | Switch old/new sides on a paired side-by-side row. |
+| `↑`/`↓`, `PageUp`/`PageDown` | Scroll the current page. |
 | `Ctrl+u`/`Ctrl+d` | Scroll up/down half the current viewport height. |
-| `c` | Collapse or expand the first file intersecting the visible viewport. |
+| `c` | Open a comment editor below the selected source row. |
+| `Esc` (editor) | Close the editor, retaining its draft for this session. |
+| `Ctrl+s` (editor) | Publish an individual line comment to GitHub. |
+| `z` | Collapse or expand the first file intersecting the visible viewport. |
 | `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
 Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
+
+### Line comments
+
+The cursor marks the selected source cell with `▸` in its gutter and underlines its wrapped source text. It skips headers, omission markers, and collapsed files. In side-by-side mode, it initially selects the right cell when available; Space switches sides, and vertical movement prefers that side. Inline deletions target old lines; additions and context target new lines.
+
+Press `c` to write a multiline comment. Its editor appears below the selected row, in the right pane for side-by-side layouts or across the inline diff. The label identifies the target path, old/new side, and line, including for comments on left-side deletions. Enter inserts a newline, ordinary viewer shortcuts become text, Esc closes the editor, and `Ctrl+s` immediately publishes one comment. File collapse is disabled while editing. Empty comments cannot be published.
+
+Publishing requires an installed, authenticated GitHub CLI (`gh auth login`), network access, and permission to comment on the PR. Each publish checks the live PR's base and head commits against the artifact; if either changed, generate a fresh artifact. Errors retain the draft. Writes are never automatically retried; after an uncertain failure, check GitHub before retrying to avoid a duplicate comment. Individual GitHub operations time out after 30 seconds. Esc can hide an editor while publishing without cancelling the request.
+
+Published comments appear below their source rows with the author and GitHub URL. Drafts and published-comment display survive section navigation and layout/theme changes within the session, but are not written to the artifact or saved on exit. Existing GitHub comments are not fetched. Replies, comment editing/deletion, multiline ranges, and review sessions are not supported. Browsing and drafting still work offline without GitHub CLI; only `Ctrl+s` accesses GitHub.
 
 ### Markdown formatting
 
