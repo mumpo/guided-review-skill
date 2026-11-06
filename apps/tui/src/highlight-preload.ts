@@ -42,9 +42,9 @@ export function reviewSyntaxSamples({ snapshot, analysis }: LoadedReview) {
     if (!samples.has(sample.language)) samples.set(sample.language, sample);
   };
 
-  for (const source of [snapshot.summary, snapshot.pullRequest.description]) {
-    for (const sample of markdownSamples(source)) add(sample);
-  }
+  for (const sample of markdownSamples(snapshot.pullRequest.description))
+    add(sample);
+
   for (const [index, section] of snapshot.sections.entries()) {
     for (const block of explanationBlocks(section.explanation)) {
       if (block.kind === "text") {

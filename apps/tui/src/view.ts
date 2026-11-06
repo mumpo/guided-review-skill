@@ -60,6 +60,7 @@ export function mountReview(
   let narrativeText: TextRenderable[] = [];
   let narrativeMarkdown: MarkdownView[] = [];
   let prHeader: PullRequestHeader | undefined;
+  let descriptionSeparator: BoxRenderable | undefined;
 
   function plain(content: string) {
     const node = new TextRenderable(renderer, {
@@ -121,6 +122,11 @@ export function mountReview(
 
     prHeader?.setTheme(theme);
 
+    if (descriptionSeparator) {
+      descriptionSeparator.borderColor = theme.muted;
+      descriptionSeparator.backgroundColor = theme.background;
+    }
+
     explanation.setTheme(theme);
     changes.setTheme(theme);
     help.fg = theme.muted;
@@ -154,6 +160,7 @@ export function mountReview(
     narrativeText = [];
     narrativeMarkdown = [];
     prHeader = undefined;
+    descriptionSeparator = undefined;
 
     if (page === 0) {
       changes.setFiles([], diffMode);
@@ -181,9 +188,17 @@ export function mountReview(
           ...(limits.length > 0 ? [`Diff limits:\n${limits.join("\n")}`] : []),
         ].join("\n\n"),
       );
-      plain("Summary");
-      markdown(snapshot.summary || "(No summary)");
-      plain("PR description");
+      descriptionSeparator = new BoxRenderable(renderer, {
+        id: "description-separator",
+        width: "100%",
+        height: 1,
+        flexShrink: 0,
+        border: ["top"],
+        borderColor: theme.muted,
+        backgroundColor: theme.background,
+        marginBottom: 1,
+      });
+      narrative.add(descriptionSeparator);
       markdown(pr.description || "(No description)");
       plain(
         `Sections\n${snapshot.sections.map((entry, index) => `${index + 1}. ${entry.title}`).join("\n") || "(No sections)"}`,

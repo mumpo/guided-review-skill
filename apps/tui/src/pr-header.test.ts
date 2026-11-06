@@ -154,7 +154,9 @@ test("singular wording, long metadata, scrolling, resizing, navigation and live 
       headRefName:
         "feature/long-branch-name-with-unbroken-text-for-narrow-terminals",
     };
-    review.snapshot.summary = "Scrollable narrative\n".repeat(60);
+    review.snapshot.pullRequest.description = "Scrollable narrative\n".repeat(
+      60,
+    );
 
     const ui = await createTestRenderer({ width: 110, height: 18 });
 

@@ -360,16 +360,16 @@ test("Markdown around Mermaid keeps reference definitions and diagram fallbacks 
   }
 });
 
-test("summary and description format independently while titles, metadata and navigation remain literal", async () => {
+test("only the description is displayed while titles, metadata and navigation remain literal", async () => {
   const review = await loadReview(
     new URL("../../../packages/core/fixtures/valid.json", import.meta.url)
       .pathname,
   );
   review.snapshot.pullRequest.title = "**literal title**";
   review.snapshot.summary =
-    "# Summary heading\n\n**formatted summary**\n\n[unresolved][desc]";
+    "# Summary heading\n\n**formatted summary**\n\n[summaryOnly]: https://summary.example.com";
   review.snapshot.pullRequest.description =
-    "*formatted description*\n\n[desc]: https://example.com\n\n```mermaid\nA-->B\n```";
+    "*formatted description*\n\n[docs][desc] and [unresolved][summaryOnly]\n\n[desc]: https://example.com\n\n```mermaid\nA-->B\n```";
   review.snapshot.sections[0].explanation =
     "## Explanation heading\n\n**formatted explanation**";
 
@@ -384,11 +384,13 @@ test("summary and description format independently while titles, metadata and na
     let frame = ui.captureCharFrame();
 
     expect(frame).toContain("**literal title**");
-    expect(frame).toContain("formatted summary");
-    expect(frame).not.toContain("**formatted summary**");
+    expect(frame).not.toContain("formatted summary");
+    expect(frame).not.toContain("Summary heading");
+    expect(frame).not.toContain("PR description");
     expect(frame).toContain("formatted description");
     expect(frame).not.toContain("*formatted description*");
-    expect(frame).toContain("[unresolved][desc]");
+    expect(frame).toContain("docs (https://example.com)");
+    expect(frame).toContain("[unresolved][summaryOnly]");
     expect(frame).toContain("```mermaid");
 
     await ui.mockInput.pressKeys(["n"]);
@@ -411,7 +413,8 @@ test("summary and description format independently while titles, metadata and na
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Summary heading");
+    expect(ui.captureCharFrame()).toContain("formatted description");
+    expect(ui.captureCharFrame()).not.toContain("Summary heading");
   } finally {
     await ui.dispose();
   }
