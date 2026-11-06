@@ -1,24 +1,3 @@
-import { createHighlighterCoreSync } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import javascript from "shiki/langs/javascript.mjs";
-import typescript from "shiki/langs/typescript.mjs";
-import jsx from "shiki/langs/jsx.mjs";
-import tsx from "shiki/langs/tsx.mjs";
-import python from "shiki/langs/python.mjs";
-import go from "shiki/langs/go.mjs";
-import rust from "shiki/langs/rust.mjs";
-import java from "shiki/langs/java.mjs";
-import c from "shiki/langs/c.mjs";
-import cpp from "shiki/langs/cpp.mjs";
-import json from "shiki/langs/json.mjs";
-import yaml from "shiki/langs/yaml.mjs";
-import html from "shiki/langs/html.mjs";
-import css from "shiki/langs/css.mjs";
-import shell from "shiki/langs/shellscript.mjs";
-import sql from "shiki/langs/sql.mjs";
-import markdown from "shiki/langs/markdown.mjs";
-import light from "shiki/themes/github-light-default.mjs";
-import dark from "shiki/themes/github-dark-default.mjs";
 import type { DiffLine } from "../../../packages/core/src";
 import type { FileRows } from "./diff";
 import type { ThemeName } from "./theme";
@@ -95,58 +74,11 @@ export type HighlightedFile = Map<
   Partial<Record<"old" | "new", Record<ThemeName, SyntaxSpan[]>>>
 >;
 
-let highlighter: ReturnType<typeof createHighlighterCoreSync> | undefined;
-let unavailable = false;
-
-const tokenize: Tokenizer = (source, language, theme) => {
-  if (unavailable) throw new Error("Highlighter unavailable");
-  if (!highlighter) {
-    try {
-      highlighter = createHighlighterCoreSync({
-        themes: [
-          { ...light, name: "github-light" },
-          { ...dark, name: "github-dark" },
-        ],
-        langs: [
-          javascript,
-          typescript,
-          jsx,
-          tsx,
-          python,
-          go,
-          rust,
-          java,
-          c,
-          cpp,
-          json,
-          yaml,
-          html,
-          css,
-          shell,
-          sql,
-          markdown,
-        ],
-        engine: createJavaScriptRegexEngine(),
-      });
-    } catch (error) {
-      unavailable = true;
-
-      throw error;
-    }
-  }
-
-  return highlighter
-    .codeToTokens(source, { lang: language, theme })
-    .tokens.map((line) =>
-      line.map((token) => ({ text: token.content, color: token.color })),
-    );
-};
-
 /** Validate exact reconstruction before either viewer uses syntax colors. */
 export function highlightSource(
   source: string,
   language: string | undefined,
-  tokenizer: Tokenizer = tokenize,
+  tokenizer: Tokenizer,
 ): Record<ThemeName, SyntaxSpan[][]> | undefined {
   if (!language) return;
 
@@ -180,13 +112,8 @@ export function highlightSource(
   }
 }
 
-/** Only selected source enters the tokenizer; gaps reset both independent streams. */
-export function highlightFile(
-  file: FileRows,
-  tokenizer: Tokenizer = tokenize,
-): HighlightedFile {
-  const result: HighlightedFile = new Map();
-
+/** Only selected source enters the tokenizer; gaps reset independent streams. */
+export function* sourceFragments(file: FileRows) {
   for (const side of ["old", "new"] as const) {
     const language = languageForPath(
       side === "old"
@@ -195,43 +122,61 @@ export function highlightFile(
     );
     if (!language) continue;
 
-    let fragment: DiffLine[] = [];
-    const flush = () => {
-      if (!fragment.length) return;
-
-      const bodies = fragment.map((line) =>
-        line.raw.replace(/\r?\n$/, "").slice(1),
-      );
-      const colors = highlightSource(bodies.join("\n"), language, tokenizer);
-      if (colors) {
-        fragment.forEach((line, i) => {
-          const entry = result.get(line) ?? {};
-          entry[side] = {
-            "github-light": colors["github-light"][i],
-            "github-dark": colors["github-dark"][i],
-          };
-          result.set(line, entry);
-        });
-      }
-
-      fragment = [];
-    };
-
-    for (const row of file.rows) {
-      const line = row.line;
+    let lines: DiffLine[] = [];
+    for (const row of [...file.rows, { text: "", role: "marker" as const }]) {
+      const line = "line" in row ? row.line : undefined;
       if (line?.kind === "no-newline") continue;
       if (!line) {
-        flush();
-        continue;
-      }
-      if (
+        if (lines.length)
+          yield {
+            side,
+            language,
+            lines,
+            source: lines
+              .map((item) => item.raw.replace(/\r?\n$/, "").slice(1))
+              .join("\n"),
+          };
+        lines = [];
+      } else if (
         line.kind === "context" ||
         line.kind === (side === "old" ? "deletion" : "addition")
-      )
-        fragment.push(line);
+      ) {
+        lines.push(line);
+      }
     }
+  }
+}
 
-    flush();
+export type SourceColors = Record<ThemeName, SyntaxSpan[][]>;
+
+export function applyFragment(
+  result: HighlightedFile,
+  fragment: { side: "old" | "new"; lines: DiffLine[] },
+  colors: SourceColors,
+) {
+  fragment.lines.forEach((line, i) => {
+    const entry = result.get(line) ?? {};
+    entry[fragment.side] = {
+      "github-light": colors["github-light"][i],
+      "github-dark": colors["github-dark"][i],
+    };
+    result.set(line, entry);
+  });
+}
+
+export function highlightFile(
+  file: FileRows,
+  tokenizer: Tokenizer,
+): HighlightedFile {
+  const result: HighlightedFile = new Map();
+
+  for (const fragment of sourceFragments(file)) {
+    const colors = highlightSource(
+      fragment.source,
+      fragment.language,
+      tokenizer,
+    );
+    if (colors) applyFragment(result, fragment, colors);
   }
 
   return result;

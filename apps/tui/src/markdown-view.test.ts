@@ -1,3 +1,4 @@
+import { sessionHighlights } from "./highlight-service";
 import { expect, test } from "bun:test";
 import {
   RGBA,
@@ -46,6 +47,7 @@ for (const theme of Object.values(themes)) {
           '[ref]: https://example.com/docs "Documentation"',
         ].join("\n"),
       );
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       const frame = ui.captureCharFrame();
@@ -114,6 +116,7 @@ for (const theme of Object.values(themes)) {
         `[long](${destination})\n\n~~~~typescript\n${source}\n~~~~`,
       );
       ui.resize(22, 32);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       // A destination longer than the viewport must remain complete after wrapping.
@@ -173,6 +176,7 @@ for (const theme of Object.values(themes)) {
           "unclosed()",
         ].join("\n"),
       );
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       const frame = ui.captureCharFrame();
@@ -239,6 +243,7 @@ for (const theme of Object.values(themes)) {
           "ENDMARKER",
         ].join("\n"),
       );
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       expect(ui.captureCharFrame()).toContain("• Parent");
@@ -249,6 +254,7 @@ for (const theme of Object.values(themes)) {
       for (let i = 0; i < 20; i++) {
         seen.push(ui.captureCharFrame());
         body.scrollBy(5);
+        await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
       }
 
@@ -263,19 +269,23 @@ for (const theme of Object.values(themes)) {
       view.setTheme(
         themes[theme.name === "github-light" ? "github-dark" : "github-light"],
       );
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       expect(body.scrollTop).toBe(top);
       expect(ui.captureCharFrame()).toBe(before);
 
       ui.resize(45, 12);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
       body.scrollTo(10000);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       expect(ui.captureCharFrame()).toContain("ENDMARKER");
 
       body.scrollTo(0);
+      await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
       expect(ui.captureCharFrame()).toContain("• Parent");
@@ -333,6 +343,7 @@ test("Markdown around Mermaid keeps reference definitions and diagram fallbacks 
     view.setContent(
       "# Before\n\n[docs][ref]\n\n```mermaid\nA-->B\n```\n\n**Between**\n\n```mermaid\nB-->C\n```\n\nAfter\n\n[ref]: https://example.com",
     );
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     const frame = ui.captureCharFrame();
@@ -367,6 +378,7 @@ test("summary and description format independently while titles, metadata and na
   try {
     const applyTheme = mountReview(ui.renderer, review);
 
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     let frame = ui.captureCharFrame();
@@ -380,6 +392,7 @@ test("summary and description format independently while titles, metadata and na
     expect(frame).toContain("```mermaid");
 
     await ui.mockInput.pressKeys(["n"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
     frame = ui.captureCharFrame();
 
@@ -389,11 +402,13 @@ test("summary and description format independently while titles, metadata and na
     expect(frame).toContain("src/greeting.ts");
 
     applyTheme(themes["github-light"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toBe(frame);
 
     await ui.mockInput.pressKeys(["s"]);
+    await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Summary heading");

@@ -51,7 +51,10 @@ test("both themes paint explicit readable colors without changing displayed cont
       expect(ui.captureCharFrame()).not.toContain("greeting -> guide");
       expect(ui.captureCharFrame()).toContain("+hello world");
 
-      const sign = spans().find((span) => span.text === "+");
+      // Plain source can share a rendered span with its unchanged-color sign.
+      const sign = spans().find(
+        (span) => span.text === "+" || span.text.startsWith("+hello"),
+      );
 
       expect(
         sign?.fg.equals(RGBA.fromHex(theme.diff.addition.foreground)),

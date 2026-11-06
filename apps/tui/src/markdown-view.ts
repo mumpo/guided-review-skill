@@ -8,11 +8,11 @@ import {
 } from "@opentui/core";
 import { Lexer, type Links, type Token, type Tokens } from "marked";
 import {
-  highlightSource,
   languageForFence,
   readableTokenColor,
   type SyntaxSpan,
 } from "./highlight";
+import { sessionHighlights, type SyntaxService } from "./highlight-service";
 import type { Theme, ThemeName } from "./theme";
 
 type Run = {
@@ -72,7 +72,7 @@ function inline(tokens: Token[], inherited: Run = { text: "" }): Run[] {
   });
 }
 
-function closedFence(token: Tokens.Code): boolean {
+export function closedFence(token: Tokens.Code): boolean {
   if (token.codeBlockStyle === "indented") return true;
 
   const opening = /^ {0,3}(`{3,}|~{3,})[^\n]*\n/.exec(token.raw);
@@ -87,6 +87,7 @@ function closedFence(token: Tokens.Code): boolean {
 
 /** Offline presentation only: plain styled chunks never carry active hyperlinks. */
 export class MarkdownView extends BoxRenderable {
+  private controller = new AbortController();
   private painted: {
     node: TextRenderable;
     runs: Run[];
@@ -97,6 +98,7 @@ export class MarkdownView extends BoxRenderable {
   constructor(
     private renderer: CliRenderer,
     private palette: Theme,
+    private highlights: SyntaxService = sessionHighlights(renderer),
   ) {
     super(renderer, {
       width: "100%",
@@ -107,6 +109,8 @@ export class MarkdownView extends BoxRenderable {
   }
 
   setContent(content: string, links: Links = {}) {
+    this.controller.abort();
+    this.controller = new AbortController();
     for (const child of this.getChildren()) child.destroyRecursively();
 
     this.painted = [];
@@ -127,12 +131,7 @@ export class MarkdownView extends BoxRenderable {
     this.setTheme(this.palette);
   }
 
-  private text(
-    parent: BoxRenderable,
-    runs: Run[],
-    code = false,
-    syntax?: Record<ThemeName, SyntaxSpan[][]>,
-  ) {
+  private text(parent: BoxRenderable, runs: Run[], code = false) {
     const node = new TextRenderable(this.renderer, {
       width: "100%",
       minWidth: 0,
@@ -142,9 +141,14 @@ export class MarkdownView extends BoxRenderable {
     });
 
     parent.add(node);
-    this.painted.push({ node, runs, code, syntax });
+    this.painted.push({ node, runs, code });
 
     return node;
+  }
+
+  protected destroySelf() {
+    this.controller.abort();
+    super.destroySelf();
   }
 
   private blocks(parent: BoxRenderable, tokens: Token[]) {
@@ -220,12 +224,18 @@ export class MarkdownView extends BoxRenderable {
           if (!closedFence(code) || code.lang?.trim() === "mermaid") {
             this.text(parent, [{ text: code.raw }]);
           } else {
-            this.text(
-              parent,
-              [{ text: code.text }],
-              true,
-              highlightSource(code.text, languageForFence(code.lang)),
-            );
+            this.text(parent, [{ text: code.text }], true);
+            const entry = this.painted[this.painted.length - 1];
+            const signal = this.controller.signal;
+
+            void this.highlights
+              .highlight(code.text, languageForFence(code.lang), signal)
+              .then((colors) => {
+                if (!colors || signal.aborted || this.isDestroyed) return;
+
+                entry.syntax = colors;
+                this.setTheme(this.palette);
+              });
           }
 
           break;

@@ -2,13 +2,29 @@ import { expect, test } from "bun:test";
 import type { DiffLine } from "../../../packages/core/src";
 import type { FileRows } from "./diff";
 import {
+  applyFragment,
+  sourceFragments,
+  type HighlightedFile,
   contrastRatio,
   highlightFile,
   languageForPath,
   readableTokenColor,
   type Tokenizer,
 } from "./highlight";
+import { createSyntaxEngine } from "./highlight-engine";
 import { themes } from "./theme";
+
+const engine = createSyntaxEngine();
+
+async function highlightWithEngine(input: FileRows) {
+  const result: HighlightedFile = new Map();
+  for (const fragment of sourceFragments(input)) {
+    const colors = await engine(fragment.source, fragment.language);
+    if (colors) applyFragment(result, fragment, colors);
+  }
+
+  return result;
+}
 
 function file(path: string, raw: string[]): FileRows {
   return {
@@ -65,7 +81,7 @@ test("explicit path aliases include declaration files and leave unknown paths pl
     expect(languageForPath(path)).toBeUndefined();
 });
 
-test("every bundled language highlights offline with exact source preservation in both themes", () => {
+test("every bundled language highlights offline with exact source preservation in both themes", async () => {
   const examples = {
     js: 'const answer = "hello";',
     ts: 'const answer: string = "hello";',
@@ -93,7 +109,7 @@ test("every bundled language highlights offline with exact source preservation i
       " ",
       " \t// Unicode café 😀 | + -  ",
     ]);
-    const output = highlightFile(input);
+    const output = await highlightWithEngine(input);
 
     expect(output.size).toBe(4);
 
@@ -151,7 +167,7 @@ test("old/new fragments use their own paths and never tokenize across omitted or
   ]);
 });
 
-test("multiline state is independent by side and resets for incomplete later hunks", () => {
+test("multiline state is independent by side and resets for incomplete later hunks", async () => {
   const input = file("x.ts", [
     "-/* old comment",
     '+const value = "new";',
@@ -163,7 +179,7 @@ test("multiline state is independent by side and resets for incomplete later hun
 
   input.rows.splice(5, 0, { text: "@@ -20 +20 @@", role: "hunk" });
 
-  const output = highlightFile(input);
+  const output = await highlightWithEngine(input);
 
   for (const theme of Object.values(themes)) {
     const context = output.get(input.rows[2].line as DiffLine);
@@ -272,7 +288,7 @@ test("low-contrast syntax keeps its hue and GitHub's current keyword red stays r
   ).toBeGreaterThanOrEqual(4.5);
 });
 
-test("CRLF, no-newline markers and added/deleted paths preserve source without highlighting metadata", () => {
+test("CRLF, no-newline markers and added/deleted paths preserve source without highlighting metadata", async () => {
   const input = file("x.ts", ['+const text = "😀";  ', "+", "+// end"]);
   input.oldPath = null;
 
@@ -290,7 +306,7 @@ test("CRLF, no-newline markers and added/deleted paths preserve source without h
     },
   });
 
-  const output = highlightFile(input);
+  const output = await highlightWithEngine(input);
 
   expect(output.size).toBe(3);
   expect(output.has(input.rows[1].line as DiffLine)).toBe(false);
@@ -304,5 +320,5 @@ test("CRLF, no-newline markers and added/deleted paths preserve source without h
   input.newPath = null;
   input.oldPath = "deleted.ts";
 
-  expect(highlightFile(input).size).toBe(3);
+  expect((await highlightWithEngine(input)).size).toBe(3);
 });

@@ -18,9 +18,12 @@ import {
 import { type Theme, diffGutterBackground } from "./theme";
 import {
   type HighlightedFile,
-  highlightFile,
+  applyFragment,
+  sourceFragments,
   readableTokenColor,
 } from "./highlight";
+
+import { sessionHighlights, type SyntaxService } from "./highlight-service";
 
 import {
   type ChangedSpans,
@@ -30,6 +33,7 @@ import {
 
 /** Layout owns presentation only; all rows come from resolved captured changes. */
 export class DiffView extends BoxRenderable {
+  private controller = new AbortController();
   private files: FileRows[] = [];
   private syntax: HighlightedFile = new Map();
   private changes: ChangedSpans = new Map();
@@ -59,6 +63,7 @@ export class DiffView extends BoxRenderable {
     private renderer: CliRenderer,
     private body: ScrollBoxRenderable,
     theme: Theme,
+    private highlights: SyntaxService = sessionHighlights(renderer),
   ) {
     super(renderer, {
       id: "changes",
@@ -73,12 +78,39 @@ export class DiffView extends BoxRenderable {
     this.anchorEpoch++;
     this.files = files;
     this.collapsed.clear();
-    this.syntax = new Map(files.flatMap((file) => [...highlightFile(file)]));
+    this.controller.abort();
+    this.controller = new AbortController();
+    this.syntax = new Map();
     this.changes = new Map(
       files.flatMap((file) => [...changedFileSpans(file)]),
     );
     this.preference = preference;
     this.rebuild();
+
+    const signal = this.controller.signal;
+    const fragments = files.flatMap((file) => [...sourceFragments(file)]);
+    void Promise.all(
+      fragments.map(async (fragment) => ({
+        fragment,
+        colors: await this.highlights.highlight(
+          fragment.source,
+          fragment.language,
+          signal,
+        ),
+      })),
+    ).then((results) => {
+      if (signal.aborted || this.isDestroyed) return;
+
+      for (const { fragment, colors } of results) {
+        if (colors) applyFragment(this.syntax, fragment, colors);
+      }
+      this.setTheme(this.palette);
+    });
+  }
+
+  protected destroySelf() {
+    this.controller.abort();
+    super.destroySelf();
   }
 
   setMode(preference: DiffMode) {
