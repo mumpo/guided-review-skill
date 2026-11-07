@@ -1,0 +1,17 @@
+{
+  "name": "mumpo-plugins",
+  "interface": { "displayName": "Mumpo Plugins" },
+  "plugins": [
+    {
+      "name": "guided-review",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/mumpo/guided-review-skill.git",
+        "path": "./guided-review",
+        "ref": "plugins"
+      },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Developer Tools"
+    }
+  ]
+}

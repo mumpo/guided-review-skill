@@ -4,7 +4,37 @@ Guided Review will help people review GitHub pull requests through an ordered, a
 
 The shared artifact contract, GitHub collection helper, generation skill for Codex and Claude Code, and terminal diff viewer are implemented. The web viewer is still planned. See [PLAN.md](PLAN.md) for the sequential implementation tasks.
 
-## Generate a guided review
+## Install the plugin
+
+Prerequisites: [Bun](https://bun.com/) **1.3.14 or later**, [GitHub CLI (`gh`)](https://cli.github.com/), and a local Codex or Claude Code installation. Authenticate GitHub CLI with `gh auth login` using an account that can access the PR. Viewing and drafting comments work offline; collection and explicit comment publication need GitHub access.
+
+The plugin includes its helpers, terminal viewer, native OpenTUI libraries for macOS/Linux/Windows on arm64/x64 (including Linux musl), syntax grammars, and background workers. **No setup command, repository clone, or `bun install` is required.** Host approvals still apply. Graphical Mermaid rendering remains an optional enhancement described below; diagrams have a readable source fallback without extra dependencies. Automatic terminal opening uses macOS Terminal by default; on other platforms use an existing tmux/Herdr session or configure your terminal's custom launch command.
+
+The commands below become available after the first maintainer release publishes the `plugins` branch. This source branch contains the release tooling and catalogs, not the bundled runtime.
+
+In Claude Code:
+
+```text
+/plugin marketplace add mumpo/guided-review-skill
+/plugin install guided-review@mumpo-plugins
+```
+
+Start a new session, then invoke `/guided-review:guided-review https://github.com/OWNER/REPO/pull/NUMBER`. Plugin skills use Claude Code's plugin namespace; source-checkout skills use `/guided-review`.
+
+For Codex, run these commands in your shell:
+
+```sh
+codex plugin marketplace add mumpo/guided-review-skill
+codex plugin add guided-review@mumpo-plugins
+```
+
+Start a new session and invoke the installed `guided-review` skill with a PR URL, or select it from the skills picker. Codex's `/plugins` browser can also install from the registered marketplace. Use a local execution environment: the workflow invokes local Bun and GitHub CLI and opens a terminal. The OpenAI directory package declares `requires_local_executor` for desktop-only listing.
+
+To update, run `/plugin update guided-review@mumpo-plugins` in Claude Code. In Codex run `codex plugin marketplace upgrade mumpo-plugins`, then use `/plugins` to refresh/reinstall the plugin and start a new session. Keep the installed package together; copying only its skill directory loses the runtime.
+
+See the official [Claude distribution guide](https://code.claude.com/docs/en/plugins/publish), [OpenAI packaging guide](https://developers.openai.com/plugins/build/plugins), and [maintainer release instructions](docs/distribution.md).
+
+## Generate a guided review from a source checkout
 
 Keep a full clone of this repository and install its dependencies with `bun install`. Install Bun, Codex or Claude Code, and an authenticated GitHub CLI. When working in this repository, both agents discover the same skill through checked-in links:
 
@@ -44,18 +74,9 @@ Building preserves collected metadata and diff text, rejects invalid references,
 
 A generated example for `cli/cli#1` is in [skills/guided-review/fixtures/cli-pr-1.json](skills/guided-review/fixtures/cli-pr-1.json), with selection/action behavior ordered before command wiring and both parts of the file covered.
 
-## One-time permission setup
+## Permissions
 
-For Codex, preview and install narrow permissions for the installed collector and launcher helpers:
-
-```sh
-bun run skills/guided-review/scripts/setup-permissions.ts
-bun run skills/guided-review/scripts/setup-permissions.ts --install
-```
-
-Review the preview before installing, then restart Codex. Setup writes only `$CODEX_HOME/rules/guided-review.rules` (default `~/.codex/rules/guided-review.rules`), resolves the clone's real path, and preserves unrelated rules. It refuses to replace differing existing content. The rules approve those two helper prefixes outside the sandbox, including their repository dependencies and user-configured custom launcher. They do not grant blanket Bun, GitHub CLI, Herdr, or shell access. Moving the clone requires reviewing/replacing its dedicated rules file. Remove that file and restart Codex to revoke the grants.
-
-Claude Code uses the shared skill's `allowed-tools` declarations for those same two helpers, with its installed skill-directory substitution. No separate settings install is needed. These declarations do not override explicit ask/deny rules, managed restrictions, or OS sandbox/network/socket restrictions. OS automation permissions and artifact output outside writable locations can still require approval in either host. See [permission setup details](skills/guided-review/references/permissions.md).
+Plugin installation needs no permission setup command. Use Codex's normal approval prompts for the collector and launcher. Claude Code uses the shared skill's `allowed-tools` declarations for those same two helpers, with its installed skill-directory substitution. These declarations do not override explicit ask/deny rules, managed restrictions, or OS sandbox/network/socket restrictions. OS automation permissions and artifact output outside writable locations can still require approval in either host. Advanced, optional permission customization is documented in [permission details](skills/guided-review/references/permissions.md); ordinary reviews never install rules.
 
 The collector now supports writing its output directly, without shell redirection:
 
@@ -69,7 +90,7 @@ Omitting `--output` preserves JSON on stdout. Existing output files are never ov
 
 After generating and inspecting a valid artifact, the shared Codex/Claude Code skill calls the local launcher. It opens a user-facing terminal and returns control to the agent. Explicit requests to generate without opening skip this step. Host permissions still apply; the skill cannot bypass sandbox or operating-system approval requirements.
 
-Create `$XDG_CONFIG_HOME/guided-review/config.toml` (default `~/.config/guided-review/config.toml`) using [config.example.toml](config.example.toml) as a starting point. Installation and viewing never write personal configuration. Use `--config PATH` on either launcher or TUI to select another file, or set `GUIDED_REVIEW_CONFIG`; precedence is CLI path → environment path → default path. Explicit paths must exist. Paths are resolved from the caller's working directory.
+Optionally create `$XDG_CONFIG_HOME/guided-review/config.toml` (default `~/.config/guided-review/config.toml`) using [config.example.toml](config.example.toml) as a starting point. Defaults work without a configuration file. Installation and viewing never write personal configuration. Use `--config PATH` on either launcher or TUI to select another file, or set `GUIDED_REVIEW_CONFIG`; precedence is CLI path → environment path → default path. Explicit paths must exist. Paths are resolved from the caller's working directory.
 
 ```toml
 viewer = "tui"

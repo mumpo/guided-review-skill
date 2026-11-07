@@ -1,10 +1,12 @@
-# One-time permissions
+# Optional permission customization
+
+Plugin installation and use require no setup command. Normal host approval prompts work without any custom rules. The commands below are advanced, optional customization for users who explicitly want persistent helper approvals. Plugin caches move when versions change; any saved rules for an old installation must be reviewed again for the new paths.
 
 Read this for explicit installation/setup requests or permission troubleshooting, not for ordinary artifact generation. Never install permission rules merely because a review command needs approval.
 
 ## Codex
 
-From the full Guided Review clone, preview the exact two command-prefix rules:
+From the full Guided Review clone (or the complete installed plugin's root), preview the exact two command-prefix rules:
 
 ```sh
 bun run skills/guided-review/scripts/setup-permissions.ts
