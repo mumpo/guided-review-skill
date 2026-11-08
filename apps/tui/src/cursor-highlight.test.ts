@@ -12,7 +12,7 @@ import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import { cursorBackground } from "./cursor-highlight";
 import { diffGutterBackground, type Theme, themes } from "./theme";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 import { sessionHighlights } from "./highlight-service";
 
 function selectedBox(root: Renderable, theme: Theme): BoxRenderable {
@@ -120,7 +120,7 @@ for (const theme of Object.values(themes)) {
 
           return box;
         };
-        await press("n", "j");
+        await press("\u000e", "j");
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -311,7 +311,7 @@ for (const theme of Object.values(themes)) {
           await ui.mockInput.pressKeys(["s"]);
           await ui.renderOnce();
           checkRows();
-          await ui.mockInput.pressKeys(["n"]);
+          await ui.mockInput.pressKeys(["\u000e"]);
           await ui.renderOnce();
           checkRows();
           for (let i = 0; i < 29; i++) {

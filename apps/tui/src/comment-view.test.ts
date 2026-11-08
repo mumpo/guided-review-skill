@@ -8,7 +8,7 @@ import { createTestRenderer, KeyCodes } from "@opentui/core/testing";
 import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import type { CommentTarget, PublishedComment } from "./comments";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 import { themes } from "./theme";
 import { sessionHighlights } from "./highlight-service";
 
@@ -47,7 +47,7 @@ for (const theme of Object.values(themes)) {
             });
           },
         );
-        await ui.mockInput.pressKeys(["n", "j", "j", "j", "c"]);
+        await ui.mockInput.pressKeys(["\u000e", "j", "j", "j", "c"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -91,7 +91,7 @@ for (const theme of Object.values(themes)) {
         await ui.renderOnce();
 
         expect(Boolean(editor())).toBe(false);
-        await ui.mockInput.pressKeys(["n", "p", "j", "j", "j", "c"]);
+        await ui.mockInput.pressKeys(["\u000e", "\u0010", "j", "j", "j", "c"]);
         await ui.renderOnce();
 
         expect(editor().plainText).toBe(body);
@@ -127,7 +127,7 @@ for (const theme of Object.values(themes)) {
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("me: Posted body");
-        await ui.mockInput.pressKeys(["n", "p"]);
+        await ui.mockInput.pressKeys(["\u000e", "\u0010"]);
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("me: Posted body");
@@ -159,7 +159,7 @@ test("split cursor skips metadata, switches sides with Space, and preserves sour
         return posted;
       },
     );
-    await ui.mockInput.pressKeys(["n", "j", "j", "j", " ", "c"]);
+    await ui.mockInput.pressKeys(["\u000e", "j", "j", "j", " ", "c"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -215,7 +215,7 @@ test("empty and failed submissions keep the editor and draft; Esc during publish
       ui.renderer.root.findDescendantById(
         "comment-editor",
       ) as TextareaRenderable;
-    await ui.mockInput.pressKeys(["n", "j", "j", "j", "c", "\u0013"]);
+    await ui.mockInput.pressKeys(["\u000e", "j", "j", "j", "c", "\u0013"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -246,7 +246,7 @@ test("cursor scrolls into view and collapsed files and non-source sections canno
 
   try {
     mountReview(ui.renderer, review);
-    await ui.mockInput.pressKeys(["n", ...Array(62).fill("j")]);
+    await ui.mockInput.pressKeys(["\u000e", ...Array(62).fill("j")]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -261,7 +261,7 @@ test("cursor scrolls into view and collapsed files and non-source sections canno
     expect(Boolean(ui.renderer.root.findDescendantById("comment-editor"))).toBe(
       false,
     );
-    await ui.mockInput.pressKeys(["n", "n", "c"]);
+    await ui.mockInput.pressKeys(["\u000e", "\u000e", "c"]);
     await ui.renderOnce();
 
     expect(Boolean(ui.renderer.root.findDescendantById("comment-editor"))).toBe(
@@ -284,7 +284,7 @@ test("automatic layout changes retain old-context editor text, focus, and source
 
   try {
     mountReview(ui.renderer, data());
-    await ui.mockInput.pressKeys(["n", "j", "j", "j", "j", " ", "c"]);
+    await ui.mockInput.pressKeys(["\u000e", "j", "j", "j", "j", " ", "c"]);
     await ui.mockInput.typeText("context draft");
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
@@ -349,12 +349,12 @@ test("renamed and deleted files publish correct paths and comments follow overla
       );
       const editor = () =>
         ui.renderer.root.findDescendantById("comment-editor");
-      await ui.mockInput.pressKeys(["n", "j", "j", "j", "c"]);
+      await ui.mockInput.pressKeys(["\u000e", "j", "j", "j", "c"]);
       await ui.mockInput.typeText("First comment");
       await ui.mockInput.pressKeys(["\u0013"]);
       await sessionHighlights(ui.renderer).settled();
       await ui.waitFor(() => !editor());
-      await ui.mockInput.pressKeys(["n", "j", "j", "j", "c"]);
+      await ui.mockInput.pressKeys(["\u000e", "j", "j", "j", "c"]);
       await ui.mockInput.typeText("Second comment");
       await ui.mockInput.pressKeys(["\u0013"]);
       await ui.waitFor(() => !editor());
@@ -378,5 +378,66 @@ test("renamed and deleted files publish correct paths and comments follow overla
       await sessionHighlights(ui.renderer).settled();
       await ui.dispose();
     }
+  }
+});
+
+test("custom editor shortcuts and shared drafts follow repeated source targets", async () => {
+  const { resolveKeybindings } = await import(
+    "../../../packages/preferences/src"
+  );
+  const review = data();
+  review.snapshot.sections = review.snapshot.sections
+    .slice(0, 2)
+    .map((section) => ({
+      ...section,
+      references: [{ kind: "file", fileId: "greeting" }],
+    }));
+  review.analysis = analyzeDiffs(review.snapshot);
+  const ui = await createTestRenderer({ width: 100, height: 35 });
+  const targets: CommentTarget[] = [];
+  try {
+    mountReview(
+      ui.renderer,
+      review,
+      themes["github-dark"],
+      "inline",
+      async (target, body) => {
+        targets.push(target);
+        return { ...posted, body };
+      },
+      resolveKeybindings({
+        close_comment: ["ctrl+e"],
+        publish_comment: ["ctrl+y"],
+      }),
+    );
+    await sessionHighlights(ui.renderer).settled();
+    await ui.mockInput.pressKeys(["\u000e", "\t", "j", "c"]);
+    await ui.renderOnce();
+    const editor = () =>
+      ui.renderer.root.findDescendantById("comment-editor") as
+        | TextareaRenderable
+        | undefined;
+    expect(editor()).toBeDefined();
+    await ui.mockInput.typeText("shared draft");
+    await ui.mockInput.pressKeys(["\u001b[27u"]);
+    await ui.renderOnce();
+    expect(editor()?.plainText).toBe("shared draft");
+    expect(ui.captureCharFrame()).toContain("ctrl+e: close");
+    expect(ui.captureCharFrame()).toContain("ctrl+y: publish");
+    await ui.mockInput.pressKeys(["\u0005", "\u000e", "\t", "j", "c"]);
+    await ui.renderOnce();
+    expect(editor()?.plainText).toBe("shared draft");
+    await ui.mockInput.pressKeys(["\u0019"]);
+    await ui.waitFor(() => !editor());
+    expect(targets).toHaveLength(1);
+    await ui.mockInput.pressKeys(["\u0010", "\t", "j"]);
+    await ui.renderOnce();
+    expect(ui.captureCharFrame()).toContain("me: shared draft");
+    await ui.mockInput.pressKeys(["c"]);
+    await ui.renderOnce();
+    expect(editor()?.plainText).toBe("");
+  } finally {
+    await sessionHighlights(ui.renderer).settled();
+    await ui.dispose();
   }
 });

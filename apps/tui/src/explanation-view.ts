@@ -26,20 +26,23 @@ export class ExplanationView extends BoxRenderable {
   private timer?: ReturnType<typeof setTimeout>;
   private palette: Theme;
   private links: Links = {};
-  private onFrame = () => {
+  private onFrame = () => this.checkGeometry();
+
+  checkGeometry() {
     if (
       !this.timer &&
       this.blocks.some(({ block }) => block.kind === "mermaid") &&
       this.signature !== this.geometrySignature()
     )
       this.resizeLayout();
-  };
+  }
 
   constructor(
     private renderer: CliRenderer,
     private body: ScrollBoxRenderable,
     theme: Theme,
     private render: DiagramRenderer = renderDiagram,
+    watchGeometry = true,
   ) {
     super(renderer, {
       id: "explanation",
@@ -49,7 +52,7 @@ export class ExplanationView extends BoxRenderable {
     });
     this.palette = theme;
     // Pixel replies request a frame but do not emit a capabilities/resize event.
-    renderer.on("frame", this.onFrame);
+    if (watchGeometry) renderer.on("frame", this.onFrame);
   }
 
   setContent(content: string) {
@@ -91,7 +94,10 @@ export class ExplanationView extends BoxRenderable {
 
   private geometry() {
     const resolution = this.renderer.resolution;
-    const columns = Math.max(1, this.renderer.width - 3);
+    const columns = Math.max(
+      1,
+      this.body.viewport.width || this.renderer.width - 1,
+    );
     const cellWidth = resolution ? resolution.width / this.renderer.width : 0;
     const cellHeight = resolution
       ? resolution.height / this.renderer.height
@@ -160,6 +166,13 @@ export class ExplanationView extends BoxRenderable {
     if (!force && this.signature === signature) return;
 
     this.signature = signature;
+    if (!force && !this.blocks.some(({ block }) => block.kind === "mermaid")) {
+      for (const { node } of this.blocks) {
+        const markdown = node.getChildren()[0];
+        if (markdown instanceof MarkdownView) markdown.setTheme(this.palette);
+      }
+      return;
+    }
     this.controller.abort();
     this.controller = new AbortController();
 

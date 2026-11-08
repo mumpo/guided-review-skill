@@ -39,6 +39,11 @@ import {
   type PublishedComment,
   type PublishComment,
 } from "./comments";
+import {
+  keyAction,
+  resolveKeybindings,
+  type Keybindings,
+} from "../../../packages/preferences/src/keybindings";
 import { cursorBackground } from "./cursor-highlight";
 
 interface CursorRow {
@@ -48,11 +53,21 @@ interface CursorRow {
   header?: boolean;
 }
 
-interface Draft {
+export interface Draft {
   body: string;
   cursor: number;
   pending?: boolean;
   error?: string;
+}
+
+export interface CommentState {
+  drafts: Map<string, Draft>;
+  comments: Map<string, PublishedComment[]>;
+  listeners: Set<() => void>;
+}
+
+export function createCommentState(): CommentState {
+  return { drafts: new Map(), comments: new Map(), listeners: new Set() };
 }
 
 /** Layout owns presentation only; all rows come from resolved captured changes. */
@@ -94,10 +109,53 @@ export class DiffView extends BoxRenderable {
   private cursorActive = true;
   private active?: CommentTarget;
   private editor?: TextareaRenderable;
-  private drafts = new Map<string, Draft>();
-  private comments = new Map<string, PublishedComment[]>();
   private commentBoxes: BoxRenderable[] = [];
   private commentText: TextRenderable[] = [];
+  private columns?: number;
+  private onComments = () => this.preserve(() => this.rebuild());
+
+  private get drafts() {
+    return this.commentState.drafts;
+  }
+
+  private get comments() {
+    return this.commentState.comments;
+  }
+
+  get editing() {
+    return !!this.active;
+  }
+
+  get cursorFile() {
+    return this.selectedHeader ?? this.selected?.fileId;
+  }
+
+  focusFile(id: string) {
+    const row = this.visibleCursorRows().find(
+      (row) => row.header && row.file === id,
+    );
+    if (!row) return false;
+
+    this.selectRow(row);
+    this.setCursorActive(true);
+    this.setTheme(this.palette);
+    return true;
+  }
+
+  fileHeaderNode(id: string) {
+    return this.headers.find(({ file }) => file.id === id)?.box;
+  }
+
+  focusLastCursor() {
+    const rows = this.visibleCursorRows();
+    if (!rows.length) return false;
+
+    this.selectRow(rows[rows.length - 1]);
+    this.setCursorActive(true);
+    this.setTheme(this.palette);
+    this.revealCursor();
+    return true;
+  }
 
   constructor(
     private renderer: CliRenderer,
@@ -105,6 +163,8 @@ export class DiffView extends BoxRenderable {
     theme: Theme,
     private highlights: SyntaxService = sessionHighlights(renderer),
     private publish?: PublishComment,
+    private bindings: Keybindings = resolveKeybindings(),
+    private commentState: CommentState = createCommentState(),
   ) {
     super(renderer, {
       id: "changes",
@@ -113,6 +173,7 @@ export class DiffView extends BoxRenderable {
       flexShrink: 0,
     });
     this.palette = theme;
+    this.commentState.listeners.add(this.onComments);
   }
 
   setFiles(files: FileRows[], preference: DiffMode) {
@@ -155,6 +216,7 @@ export class DiffView extends BoxRenderable {
   }
 
   protected destroySelf() {
+    this.commentState.listeners.delete(this.onComments);
     this.controller.abort();
     super.destroySelf();
   }
@@ -178,12 +240,13 @@ export class DiffView extends BoxRenderable {
   handleCommentKey(key: KeyEvent) {
     if (!this.active) return false;
 
-    if (key.name === "escape") {
+    const action = keyAction(this.bindings, key, "editor");
+    if (action === "close_comment") {
       this.captureEditor();
       this.active = undefined;
       this.preserve(() => this.rebuild());
       key.preventDefault();
-    } else if (key.ctrl && key.name === "s") {
+    } else if (action === "publish_comment") {
       this.captureEditor();
       void this.submitComment();
       key.preventDefault();
@@ -236,7 +299,7 @@ export class DiffView extends BoxRenderable {
       draft.error = error instanceof Error ? error.message : String(error);
     }
 
-    if (!this.isDestroyed) this.preserve(() => this.rebuild());
+    for (const listener of this.commentState.listeners) listener();
   }
 
   private visibleCursorRows() {
@@ -356,7 +419,8 @@ export class DiffView extends BoxRenderable {
   }
 
   /** Called before the renderer lays out a new terminal size. */
-  resizeLayout() {
+  resizeLayout(columns?: number) {
+    if (columns !== undefined) this.columns = columns;
     this.preserve(() => {
       const signature = this.layoutSignature();
       if (signature !== this.signature) this.rebuild();
@@ -372,8 +436,10 @@ export class DiffView extends BoxRenderable {
   }
 
   private availableWidth() {
-    // Root has one column of padding on each side; the scroll bar takes one.
-    return Math.max(1, this.renderer.width - 3);
+    return Math.max(
+      1,
+      this.columns ?? (this.body.viewport.width || this.renderer.width - 3),
+    );
   }
 
   private preserve(change: () => void) {
@@ -386,6 +452,7 @@ export class DiffView extends BoxRenderable {
         node.y + node.height > top,
     );
     const oldY = anchor?.node.y;
+    const scrollTop = this.body.scrollTop;
 
     change();
     if (
@@ -397,7 +464,8 @@ export class DiffView extends BoxRenderable {
       return;
 
     this.body.afterLayout(() => {
-      if (epoch !== this.anchorEpoch) return;
+      if (epoch !== this.anchorEpoch || this.body.scrollTop !== scrollTop)
+        return;
 
       const next = this.logical.find(
         (row) =>
@@ -412,7 +480,7 @@ export class DiffView extends BoxRenderable {
     const selectedFile = this.selectedHeader ?? this.selected?.fileId;
     if (this.cursorActive && selectedFile) {
       this.toggleFile(selectedFile);
-      return;
+      return true;
     }
 
     const top = this.body.viewport.y;
@@ -425,7 +493,10 @@ export class DiffView extends BoxRenderable {
           content.visible ? content.y + content.height : 0,
         ) > top,
     );
-    if (header) this.toggleFile(header.file.id);
+    if (!header) return false;
+
+    this.toggleFile(header.file.id);
+    return true;
   }
 
   private toggleFile(id: string) {
@@ -803,7 +874,11 @@ export class DiffView extends BoxRenderable {
             onContentChange: () => this.captureEditor(),
           });
           box.add(this.editor);
-          text(draft.pending ? "Publishing…" : "Esc: close · Ctrl+s: publish");
+          text(
+            draft.pending
+              ? "Publishing…"
+              : `${this.bindings.close_comment.join("/") || "unbound"}: close · ${this.bindings.publish_comment.join("/") || "unbound"}: publish`,
+          );
           if (draft.error) text(draft.error);
         }
       } else if (status) {

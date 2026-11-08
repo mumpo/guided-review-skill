@@ -1,6 +1,9 @@
+import { resolveKeybindings, type Keybindings } from "./keybindings";
 import { readFile, access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+
+export * from "./keybindings";
 
 export type ThemeName = "github-light" | "github-dark";
 export type ThemePreference = ThemeName | "auto";
@@ -19,6 +22,7 @@ export type LaunchTarget = (typeof launchTargets)[number];
 
 export interface Preferences {
   configFile: string;
+  keybindings: Keybindings;
   viewer: "tui";
   autoOpen: boolean;
   theme: ThemePreference;
@@ -146,6 +150,7 @@ export async function loadPreferences(
     const tui = table(
       root.tui,
       [
+        "keybindings",
         "theme",
         "light_theme",
         "dark_theme",
@@ -193,6 +198,7 @@ export async function loadPreferences(
 
     return {
       configFile: resolve(path),
+      keybindings: resolveKeybindings(tui.keybindings),
       viewer: "tui",
       autoOpen: (root.auto_open as boolean | undefined) ?? true,
       theme: cli.theme ?? environment ?? configuredTheme,

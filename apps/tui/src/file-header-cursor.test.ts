@@ -10,7 +10,7 @@ import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import { cursorBackground } from "./cursor-highlight";
 import { sessionHighlights } from "./highlight-service";
 import { themes } from "./theme";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 
 for (const theme of Object.values(themes)) {
   for (const mode of ["inline", "side-by-side"] as const) {
@@ -63,7 +63,7 @@ for (const theme of Object.values(themes)) {
           await ui.mockInput.pressKeys(keys);
           await ui.renderOnce();
         };
-        await press("n", "j", "j", "c", " ");
+        await press("\u000e", "j", "j", "c", " ");
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 

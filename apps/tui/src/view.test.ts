@@ -80,22 +80,18 @@ test("summary separates metadata from the unlabeled description in both themes a
         expect(separator.width).toBeLessThan(wideWidth);
         expect(separator.width).toBeGreaterThan(0);
 
-        review.snapshot.pullRequest.description = "";
-        await ui.mockInput.pressKeys(["n"]);
+        await ui.mockInput.pressKeys(["\u000e"]);
         await ui.renderOnce();
 
         expect(
           ui.renderer.root.findDescendantById("description-separator"),
-        ).toBeUndefined();
+        ).toBe(separator);
 
         await ui.mockInput.pressKeys(["s"]);
         await ui.renderOnce();
 
-        expect(ui.captureCharFrame()).toContain("(No description)");
+        expect(ui.captureCharFrame()).toContain("Description starts here");
         expect(ui.captureCharFrame()).not.toContain("(No summary)");
-        expect(
-          ui.renderer.root.findDescendantById("description-separator"),
-        ).toBeDefined();
       } finally {
         await sessionHighlights(ui.renderer).settled();
         await ui.dispose();
@@ -132,12 +128,12 @@ test("both themes paint explicit readable colors without changing displayed cont
         theme.navigation.background,
       );
       expectColor("Update the greeting", theme.text, theme.background);
-      expectColor("q/Ctrl+C: quit", theme.muted, theme.surface);
+      expectColor("q/ctrl+c: quit", theme.muted, theme.surface);
 
       // The viewport margin is painted too, even when the terminal has the opposite appearance.
       expect(spans()[0].bg.equals(RGBA.fromHex(theme.background))).toBe(true);
 
-      await ui.mockInput.pressKeys(["n"]);
+      await ui.mockInput.pressKeys(["\u000e"]);
       await ui.renderOnce();
 
       expect(ui.captureCharFrame()).not.toContain("greeting -> guide");
@@ -178,7 +174,10 @@ test("live appearance changes preserve page, scroll position, and resizing", asy
     const apply = mountReview(ui.renderer, review);
 
     await startTheme(ui.renderer, "auto", apply);
-    await ui.mockInput.pressKeys(["n", ...Array(5).fill(KeyCodes.ARROW_DOWN)]);
+    await ui.mockInput.pressKeys([
+      "\u000e",
+      ...Array(5).fill(KeyCodes.ARROW_DOWN),
+    ]);
     await ui.renderOnce();
 
     const before = ui.captureCharFrame();
@@ -229,19 +228,17 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(frame).not.toContain(review.snapshot.summary);
     expect(frame).toContain(review.snapshot.pullRequest.description);
     expect(frame).not.toContain("PR description");
-    expect(frame).toContain("1. Greeting");
-    expect(frame).toContain("2. Farewell");
-    expect(frame).toContain("3. Other files");
+    expect(ui.renderer.root.findDescendantById("section-3")).toBeDefined();
     expect(frame).toContain("outside the walkthrough");
     expect(frame).toContain("image.png: binary");
     expect(frame).toContain("large.txt: unavailable (Diff omitted by source)");
 
-    await ui.mockInput.pressKeys(["p"]);
+    await ui.mockInput.pressKeys(["\u0010"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("#42 · Summary");
 
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
@@ -254,16 +251,18 @@ test("opens a local fixture and navigates ordered sections with real key events"
     expect(ui.captureCharFrame()).toContain("  1         -hello");
     expect(ui.captureCharFrame()).toContain("        1   +hello world");
     expect(ui.captureCharFrame()).toContain("guide.md → docs/guide.md");
-    expect(ui.captureCharFrame()).not.toContain("-goodbye");
+    expect(
+      ui.renderer.root.findDescendantById("section-separator-2"),
+    ).toBeDefined();
 
-    await ui.mockInput.pressKeys([KeyCodes.ARROW_RIGHT]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Section 2/3: Farewell");
     expect(ui.captureCharFrame()).toContain(" 10         -goodbye");
-    expect(ui.captureCharFrame()).not.toContain("+hello world");
+    expect(ui.captureCharFrame()).toContain("-goodbye");
 
-    ui.mockInput.pressTab();
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
@@ -274,12 +273,12 @@ test("opens a local fixture and navigates ordered sections with real key events"
       "Diff unavailable: Diff omitted by source",
     );
 
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
 
-    ui.mockInput.pressTab({ shift: true });
+    await ui.mockInput.pressKeys(["\u0010"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Section 2/3: Farewell");
@@ -326,7 +325,7 @@ test("ungrouped diffs scroll through wrapped code and resize without losing cont
 
   try {
     mountReview(ui.renderer, review);
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Ungrouped changes");
@@ -356,14 +355,15 @@ test("ungrouped diffs scroll through wrapped code and resize without losing cont
     await ui.mockInput.pressKeys(Array(20).fill("\u001b[5~"));
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("DIFF_START");
+    // Scrolling to the top now reaches the retained PR overview.
+    expect(ui.captureCharFrame()).toContain("Update the greeting");
 
     await ui.mockInput.pressKeys(["s"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).not.toContain("DIFF_START");
 
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("DIFF_START");
@@ -383,7 +383,7 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
 
   try {
     mountReview(ui.renderer, review);
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Narrative line 1:");
@@ -397,7 +397,7 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).not.toContain("Narrative line 1:");
-    expect(ui.captureCharFrame()).toContain("q/Ctrl+C: quit");
+    expect(ui.captureCharFrame()).toContain("q/ctrl+c: quit");
 
     await ui.mockInput.pressKeys([
       "\u001b[5~",
@@ -414,7 +414,7 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
     expect(ui.captureCharFrame()).toContain("Narrative line 1: review this");
     expect(ui.captureCharFrame()).toContain("behavior.");
 
-    await ui.mockInput.pressKeys(["n", "p"]);
+    await ui.mockInput.pressKeys(["\u000e", "\u0010"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("Narrative line 1:");
@@ -444,47 +444,51 @@ test("arrows scroll by line, control motions scroll half viewport, and section n
           await ui.renderOnce();
         };
 
-        await press("h");
+        await press("\u0010");
 
         expect(ui.captureCharFrame()).toContain("#42 · Summary");
 
-        await press("l");
+        await press("\u000e");
 
         expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
 
+        const sectionOffset = body.scrollTop;
         await press(KeyCodes.ARROW_DOWN);
 
-        expect(body.scrollTop).toBe(1);
+        expect(body.scrollTop).toBe(sectionOffset + 1);
 
         await press(KeyCodes.ARROW_UP);
 
-        expect(body.scrollTop).toBe(0);
+        expect(body.scrollTop).toBe(sectionOffset);
 
         await press("\u0004"); // Ctrl+d
 
-        expect(body.scrollTop).toBe(Math.floor(body.viewport.height / 2));
+        expect(body.scrollTop).toBe(
+          sectionOffset + Math.floor(body.viewport.height / 2),
+        );
         expect(ui.captureCharFrame()).toContain(`d: diff ${mode}`);
 
         await press("\u0015"); // Ctrl+u
 
-        expect(body.scrollTop).toBe(0);
+        expect(body.scrollTop).toBe(sectionOffset);
 
         ui.resize(55, 18);
         await ui.renderOnce();
+        const resizedOffset = body.scrollTop;
         await press("\u0004");
 
         const halfPage = Math.floor(body.viewport.height / 2);
 
-        expect(body.scrollTop).toBe(halfPage);
+        expect(body.scrollTop).toBe(resizedOffset + halfPage);
 
         applyTheme(themes["github-light"]);
         await ui.renderOnce();
 
-        expect(body.scrollTop).toBe(halfPage);
+        expect(body.scrollTop).toBe(resizedOffset + halfPage);
 
         await press("\u0015", "\u0015");
 
-        expect(body.scrollTop).toBe(0);
+        expect(body.scrollTop).toBe(Math.max(0, resizedOffset - halfPage));
 
         await press(...Array(100).fill("\u0004"));
 
@@ -496,16 +500,17 @@ test("arrows scroll by line, control motions scroll half viewport, and section n
 
         expect(body.scrollTop).toBe(bottom);
 
-        await press("l", "h");
+        await press("\u000e", "\u0010");
 
         expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
-        expect(body.scrollTop).toBe(0);
+        expect(body.scrollTop).toBeGreaterThan(0);
+        expect(ui.captureCharFrame()).toContain("Narrative 1:");
 
-        await press("h");
+        await press("\u0010");
 
         expect(ui.captureCharFrame()).toContain("#42 · Summary");
 
-        await press("l", "l", "l", "l");
+        await press("\u000e", "\u000e", "\u000e", "\u000e");
 
         expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
       } finally {
@@ -523,11 +528,11 @@ test("an artifact without sections stays on summary and Ctrl+C closes cleanly", 
 
   try {
     mountReview(ui.renderer, review);
-    await ui.mockInput.pressKeys(["n", KeyCodes.END, "p", "h", "l"]);
+    await ui.mockInput.pressKeys(["\u000e", KeyCodes.END, "\u0010", "h", "l"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("#42 · Summary");
-    expect(ui.captureCharFrame()).toContain("(No sections)");
+    expect(ui.renderer.root.findDescendantById("section-1")).toBeUndefined();
 
     ui.mockInput.pressCtrlC();
     await ui.renderer.closed;

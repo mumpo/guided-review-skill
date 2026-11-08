@@ -78,7 +78,7 @@ test("summary starts worker warm-up before navigation, without waiting for synta
         first?.language,
       ),
     ).toBeDefined();
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 

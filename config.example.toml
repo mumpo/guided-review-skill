@@ -23,3 +23,31 @@ height = 90
 # The standalone {viewer} expands into separate executable/argument entries.
 [tui.custom]
 command = ["kitty", "--title", "Guided Review", "{viewer}"]
+
+# Omitted actions keep their defaults. An array replaces an action's bindings;
+# [] disables it. Later assignments win conflicts (defaults are applied first).
+# Viewer and comment-editor bindings have separate contexts; interrupt is global.
+[tui.keybindings]
+next_section = ["ctrl+n"]
+previous_section = ["ctrl+p"]
+next_item = ["tab"]
+previous_item = ["shift+tab"]
+summary = ["s", "home"]
+last_section = ["end"]
+cursor_down = ["j"]
+cursor_up = ["k"]
+scroll_down = ["down"]
+scroll_up = ["up"]
+page_down = ["pagedown"]
+page_up = ["pageup"]
+half_page_down = ["ctrl+d"]
+half_page_up = ["ctrl+u"]
+switch_side = ["space"]
+open_comment = ["c"]
+toggle_file = ["z"]
+cycle_diff_mode = ["d"]
+toggle_sidebar = ["b"]
+quit = ["q"]
+interrupt = ["ctrl+c"]
+close_comment = ["escape"]
+publish_comment = ["ctrl+s"]

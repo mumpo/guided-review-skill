@@ -6,7 +6,7 @@ import { createTestRenderer } from "@opentui/core/testing";
 import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import type { DiffMode } from "./diff";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 import { diffGutterBackground, themes } from "./theme";
 import { readableTokenColor } from "./highlight";
 
@@ -37,7 +37,7 @@ test("both themes paint full inline rows and full split panes, including unequal
 
       try {
         mountReview(ui.renderer, data, theme, mode);
-        await ui.mockInput.pressKeys(["n"]);
+        await ui.mockInput.pressKeys(["\u000e"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -159,7 +159,7 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
   try {
     const applyTheme = mountReview(ui.renderer, review());
 
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -209,7 +209,7 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
 
     expect(ui.captureCharFrame()).toContain(" │ ");
 
-    await ui.mockInput.pressKeys(["n", "p"]);
+    await ui.mockInput.pressKeys(["\u000e", "\u0010"]);
     ui.resize(120, 45);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
@@ -222,7 +222,7 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
 
     expect(ui.captureCharFrame()).toContain("docs/guide.md");
 
-    await ui.mockInput.pressKeys(["n", "n"]);
+    await ui.mockInput.pressKeys(["\u000e", "\u000e"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -249,7 +249,7 @@ test("mode and width changes anchor scrolled diffs while theme changes preserve 
       "inline",
     );
 
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
     await ui.mockInput.pressKeys(Array(35).fill("j"));
@@ -337,7 +337,7 @@ test("markers, metadata, and empty sections retain readable themed messages in b
 
     try {
       mountReview(ui.renderer, data, theme);
-      await ui.mockInput.pressKeys(["n"]);
+      await ui.mockInput.pressKeys(["\u000e"]);
       await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
@@ -368,7 +368,7 @@ test("markers, metadata, and empty sections retain readable themed messages in b
         expect(ui.captureCharFrame()).not.toContain("new mode 100755");
       }
 
-      await ui.mockInput.pressKeys(["n"]);
+      await ui.mockInput.pressKeys(["\u000e"]);
       await sessionHighlights(ui.renderer).settled();
       await ui.renderOnce();
 
@@ -395,7 +395,7 @@ test("syntax foregrounds follow live themes and layouts without changing source 
         mode,
       );
 
-      await ui.mockInput.pressKeys(["n"]);
+      await ui.mockInput.pressKeys(["\u000e"]);
 
       let previous = "";
 
@@ -488,7 +488,7 @@ test("changed source spans combine with syntax in both themes/layouts and plain 
           mode,
         );
 
-        await ui.mockInput.pressKeys(["n"]);
+        await ui.mockInput.pressKeys(["\u000e"]);
 
         let before = "";
 
@@ -583,7 +583,7 @@ test("wrapped span backgrounds survive scrolling, resize and live layout/theme c
       "inline",
     );
 
-    await ui.mockInput.pressKeys(["n", ...Array(25).fill("j")]);
+    await ui.mockInput.pressKeys(["\u000e", ...Array(25).fill("j")]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -651,7 +651,7 @@ test("partial identifier edits emphasize whole words in both themes and layouts"
 
       try {
         mountReview(ui.renderer, data, theme, mode);
-        await ui.mockInput.pressKeys(["n"]);
+        await ui.mockInput.pressKeys(["\u000e"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -690,7 +690,7 @@ test("file headers replace Git metadata with counts and collapse independently a
 
       try {
         const applyTheme = mountReview(ui.renderer, review(), theme, mode);
-        await ui.mockInput.pressKeys(["n"]);
+        await ui.mockInput.pressKeys(["\u000e"]);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -771,7 +771,7 @@ test("file headers replace Git metadata with counts and collapse independently a
         expect(ui.captureCharFrame()).toContain("+hello");
         expect(ui.captureCharFrame()).not.toContain("›");
 
-        await ui.mockInput.pressKeys(["n", "p"]);
+        await ui.mockInput.pressKeys(["\u000e", "\u0010"]);
         ui.resize(120, 45);
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
