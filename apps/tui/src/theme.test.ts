@@ -39,6 +39,8 @@ test("theme text pairs meet a 4.5:1 contrast ratio", () => {
         (fg) => [fg, theme.background],
       ),
       [theme.markdown.code, theme.markdown.codeBackground],
+      [theme.search.match.foreground, theme.search.match.background],
+      [theme.search.focused.foreground, theme.search.focused.background],
     ];
 
     for (const [fg, bg] of pairs) {

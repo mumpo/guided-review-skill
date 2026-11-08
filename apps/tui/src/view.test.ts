@@ -3,6 +3,8 @@ import { createTestRenderer, KeyCodes } from "@opentui/core/testing";
 import { analyzeDiffs } from "../../../packages/core/src";
 import { loadReview } from "./load";
 import { mountReview } from "./view";
+import { selectedDocumentPart } from "./view-test-utils";
+import { cursorBackground } from "./cursor-highlight";
 import {
   type BoxRenderable,
   RGBA,
@@ -124,11 +126,15 @@ test("both themes paint explicit readable colors without changing displayed cont
       }
 
       expectColor(
-        "#42 · Summary",
-        theme.navigation.foreground,
-        theme.navigation.background,
+        "#42",
+        theme.pullRequest.number,
+        cursorBackground(theme.background, theme.name),
       );
-      expectColor("Update the greeting", theme.text, theme.background);
+      expectColor(
+        "Update the greeting",
+        theme.text,
+        cursorBackground(theme.background, theme.name),
+      );
       expectColor("?", theme.text, theme.background);
       expectColor("keybindings", theme.muted, theme.background);
 
@@ -155,6 +161,7 @@ test("both themes paint explicit readable colors without changing displayed cont
 
       frames.push(ui.captureCharFrame());
     } finally {
+      await sessionHighlights(ui.renderer).settled();
       await ui.dispose();
     }
   }
@@ -189,14 +196,11 @@ test("live appearance changes preserve page, scroll position, and resizing", asy
 
     expect(ui.captureCharFrame()).toBe(before);
 
-    const heading = ui
-      .captureSpans()
-      .lines[0].spans.find((span) => span.text.includes("#42"));
-
+    expect(ui.renderer.root.findDescendantById("heading")).toBeUndefined();
     expect(
-      heading?.fg.equals(
-        RGBA.fromHex(themes["github-light"].navigation.foreground),
-      ),
+      (
+        ui.renderer.root.findDescendantById("body") as ScrollBoxRenderable
+      ).backgroundColor.equals(RGBA.fromHex(themes["github-light"].background)),
     ).toBe(true);
 
     ui.resize(35, 20);
@@ -210,6 +214,7 @@ test("live appearance changes preserve page, scroll position, and resizing", asy
     expect(ui.captureCharFrame()).toBe(narrow);
     expect(narrow).toContain("Narrative line");
   } finally {
+    await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
   }
 });
@@ -224,7 +229,8 @@ test("opens a local fixture and navigates ordered sections with real key events"
 
     const frame = ui.captureCharFrame();
 
-    expect(frame).toContain("example/project #42 · Summary");
+    expect(selectedDocumentPart(ui.renderer)).toBe(0);
+    expect(ui.renderer.root.findDescendantById("heading")).toBeUndefined();
     expect(frame).toContain("Update the greeting");
     expect(frame).toContain(review.snapshot.pullRequest.baseCommit);
     expect(frame).not.toContain(review.snapshot.summary);
@@ -238,12 +244,12 @@ test("opens a local fixture and navigates ordered sections with real key events"
     await ui.mockInput.pressKeys(["\u0010"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("#42 · Summary");
+    expect(selectedDocumentPart(ui.renderer)).toBe(0);
 
     await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
+    expect(selectedDocumentPart(ui.renderer)).toBe(1);
     expect(ui.captureCharFrame()).toContain(
       "Changes the greeting and its guide.",
     );
@@ -260,14 +266,14 @@ test("opens a local fixture and navigates ordered sections with real key events"
     await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Section 2/3: Farewell");
+    expect(selectedDocumentPart(ui.renderer)).toBe(2);
     expect(ui.captureCharFrame()).toContain(" 10         -goodbye");
     expect(ui.captureCharFrame()).toContain("-goodbye");
 
     await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
+    expect(selectedDocumentPart(ui.renderer)).toBe(3);
     expect(ui.captureCharFrame()).toContain(
       "Binary file: textual diff is not available.",
     );
@@ -278,31 +284,32 @@ test("opens a local fixture and navigates ordered sections with real key events"
     await ui.mockInput.pressKeys(["\u000e"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
+    expect(selectedDocumentPart(ui.renderer)).toBe(3);
 
     await ui.mockInput.pressKeys(["\u0010"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Section 2/3: Farewell");
+    expect(selectedDocumentPart(ui.renderer)).toBe(2);
 
     await ui.mockInput.pressKeys([KeyCodes.HOME]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("#42 · Summary");
+    expect(selectedDocumentPart(ui.renderer)).toBe(0);
 
     await ui.mockInput.pressKeys([KeyCodes.END]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
+    expect(selectedDocumentPart(ui.renderer)).toBe(3);
 
     await ui.mockInput.pressKeys(["s"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("#42 · Summary");
+    expect(selectedDocumentPart(ui.renderer)).toBe(0);
 
     await ui.mockInput.pressKeys(["q"]);
     await ui.renderer.closed;
   } finally {
+    await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
   }
 });
@@ -370,6 +377,7 @@ test("ungrouped diffs scroll through wrapped code and resize without losing cont
 
     expect(ui.captureCharFrame()).toContain("DIFF_START");
   } finally {
+    await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
   }
 });
@@ -421,6 +429,7 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
 
     expect(ui.captureCharFrame()).toContain("Narrative line 1:");
   } finally {
+    await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
   }
 });
@@ -448,11 +457,11 @@ test("arrows scroll by line, control motions scroll half viewport, and section n
 
         await press("\u0010");
 
-        expect(ui.captureCharFrame()).toContain("#42 · Summary");
+        expect(selectedDocumentPart(ui.renderer)).toBe(0);
 
         await press("\u000e");
 
-        expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
+        expect(selectedDocumentPart(ui.renderer)).toBe(1);
 
         const sectionOffset = body.scrollTop;
         await press(KeyCodes.ARROW_DOWN);
@@ -510,17 +519,17 @@ test("arrows scroll by line, control motions scroll half viewport, and section n
 
         await press("\u000e", "\u0010");
 
-        expect(ui.captureCharFrame()).toContain("Section 1/3: Greeting");
+        expect(selectedDocumentPart(ui.renderer)).toBe(1);
         expect(body.scrollTop).toBeGreaterThan(0);
         expect(ui.captureCharFrame()).toContain("Narrative 1:");
 
         await press("\u0010");
 
-        expect(ui.captureCharFrame()).toContain("#42 · Summary");
+        expect(selectedDocumentPart(ui.renderer)).toBe(0);
 
         await press("\u000e", "\u000e", "\u000e", "\u000e");
 
-        expect(ui.captureCharFrame()).toContain("Section 3/3: Other files");
+        expect(selectedDocumentPart(ui.renderer)).toBe(3);
       } finally {
         await ui.dispose();
       }
@@ -539,12 +548,13 @@ test("an artifact without sections stays on summary and Ctrl+C closes cleanly", 
     await ui.mockInput.pressKeys(["\u000e", KeyCodes.END, "\u0010", "h", "l"]);
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("#42 · Summary");
+    expect(selectedDocumentPart(ui.renderer)).toBe(0);
     expect(ui.renderer.root.findDescendantById("section-1")).toBeUndefined();
 
     ui.mockInput.pressCtrlC();
     await ui.renderer.closed;
   } finally {
+    await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
   }
 });

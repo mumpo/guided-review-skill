@@ -103,3 +103,64 @@ test("key notation normalizes case and modifier order and rejects malformed valu
     expect(() => resolveKeybindings(value)).toThrow("tui.keybindings");
   }
 });
+
+test("search bindings isolate input, normalize slash and uppercase events, and resolve conflicts", () => {
+  const bindings = resolveKeybindings();
+
+  expect(normalizeBinding("/")).toBe("/");
+  expect(keyAction(bindings, { name: "/" }, "viewer")).toBe("open_search");
+  expect(keyAction(bindings, { name: "N", shift: true }, "viewer")).toBe(
+    "previous_match",
+  );
+  expect(keyAction(bindings, { name: "n" }, "search")).toBeUndefined();
+  expect(keyAction(bindings, { name: "q" }, "search")).toBeUndefined();
+  expect(keyAction(bindings, { name: "return" }, "search")).toBe(
+    "submit_search",
+  );
+  expect(keyAction(bindings, { name: "escape" }, "search")).toBe(
+    "clear_search",
+  );
+  expect(keyAction(bindings, { name: "escape" }, "editor")).toBe(
+    "close_comment",
+  );
+  expect(keyAction(bindings, { name: "c", ctrl: true }, "search")).toBe(
+    "interrupt",
+  );
+  const custom = resolveKeybindings({
+    interrupt: ["ctrl+x"],
+    submit_search: ["ctrl+x"],
+    open_search: ["f"],
+    cursor_down: ["n"],
+  });
+
+  expect(actionKeys(custom, "interrupt", "search")).toEqual([]);
+  expect(keyAction(custom, { name: "x", ctrl: true }, "search")).toBe(
+    "submit_search",
+  );
+  expect(keyAction(custom, { name: "x", ctrl: true }, "viewer")).toBe(
+    "interrupt",
+  );
+  expect(custom.next_match).toEqual([]);
+  expect(keyAction(custom, { name: "f" }, "viewer")).toBe("open_search");
+});
+
+test("clear_search can lose a binding independently in viewer and search contexts", () => {
+  const searchWins = resolveKeybindings({ submit_search: ["escape"] });
+  expect(actionKeys(searchWins, "clear_search", "search")).toEqual([]);
+  expect(actionKeys(searchWins, "clear_search", "viewer")).toEqual(["escape"]);
+  expect(keyAction(searchWins, { name: "escape" }, "search")).toBe(
+    "submit_search",
+  );
+  expect(keyAction(searchWins, { name: "escape" }, "viewer")).toBe(
+    "clear_search",
+  );
+
+  const viewerWins = resolveKeybindings({ quit: ["escape"] });
+  expect(actionKeys(viewerWins, "clear_search", "viewer")).toEqual([]);
+  expect(actionKeys(viewerWins, "clear_search", "search")).toEqual(["escape"]);
+  expect(keyAction(viewerWins, { name: "escape" }, "search")).toBe(
+    "clear_search",
+  );
+  expect(keyAction(viewerWins, { name: "escape" }, "viewer")).toBe("quit");
+  expect(keyAction(viewerWins, { name: "N" }, "viewer")).toBe("previous_match");
+});

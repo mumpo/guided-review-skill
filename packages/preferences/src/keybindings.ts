@@ -20,6 +20,11 @@ export const defaultKeybindings = {
   cycle_diff_mode: ["d"],
   toggle_sidebar: ["b"],
   toggle_help: ["?"],
+  open_search: ["/"],
+  clear_search: ["escape"],
+  submit_search: ["return"],
+  next_match: ["n"],
+  previous_match: ["shift+n"],
   quit: ["q"],
   interrupt: ["ctrl+c"],
   close_comment: ["escape"],
@@ -28,7 +33,7 @@ export const defaultKeybindings = {
 
 export type KeyAction = keyof typeof defaultKeybindings;
 export type Keybindings = Record<KeyAction, string[]>;
-export type KeyContext = "viewer" | "editor";
+export type KeyContext = "viewer" | "editor" | "search";
 
 const modifiers = ["ctrl", "alt", "shift", "meta"];
 const namedKeys = new Set([
@@ -55,7 +60,7 @@ export function normalizeBinding(value: string): string {
   const key = parts.pop() ?? "";
   const mods = parts.map((part) => (part === "option" ? "alt" : part));
   if (
-    (!/^[a-z0-9?]$/.test(key) && !namedKeys.has(key)) ||
+    (!/^[a-z0-9?/]$/.test(key) && !namedKeys.has(key)) ||
     mods.some((mod) => !modifiers.includes(mod)) ||
     new Set(mods).size !== mods.length
   )
@@ -65,11 +70,19 @@ export function normalizeBinding(value: string): string {
 }
 
 function contexts(action: KeyAction): KeyContext[] {
-  if (action === "interrupt") return ["viewer", "editor"];
+  if (action === "interrupt") return ["viewer", "editor", "search"];
+  if (action === "submit_search") return ["search"];
+  if (action === "clear_search") return ["viewer", "search"];
   if (action === "close_comment" || action === "publish_comment")
     return ["editor"];
   return ["viewer"];
 }
+
+// Multi-context actions can retain a key in one context while losing another.
+const resolvedContexts = new WeakMap<
+  Keybindings,
+  Record<KeyContext, Map<string, KeyAction>>
+>();
 
 export function resolveKeybindings(value: unknown = {}): Keybindings {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -101,6 +114,7 @@ export function resolveKeybindings(value: unknown = {}): Keybindings {
   const winners: Record<KeyContext, Map<string, KeyAction>> = {
     viewer: new Map(),
     editor: new Map(),
+    search: new Map(),
   };
   for (const [action, bindings] of assignments) {
     for (const binding of bindings) {
@@ -124,6 +138,7 @@ export function resolveKeybindings(value: unknown = {}): Keybindings {
         ),
     );
   }
+  resolvedContexts.set(result, winners);
   return result;
 }
 
@@ -134,6 +149,12 @@ export function actionKeys(
   context: KeyContext,
 ): string[] {
   if (!contexts(action).includes(context)) return [];
+  const winners = resolvedContexts.get(bindings)?.[context];
+  if (winners)
+    return bindings[action].filter(
+      (binding) => winners.get(binding) === action,
+    );
+
   return bindings[action].filter(
     (binding) =>
       action !== "interrupt" ||
@@ -165,7 +186,7 @@ export function keyAction(
       [
         ...(key.ctrl ? ["ctrl"] : []),
         ...(key.option ? ["alt"] : []),
-        ...(key.shift ? ["shift"] : []),
+        ...(key.shift || /^[A-Z]$/.test(key.name) ? ["shift"] : []),
         ...(key.meta ? ["meta"] : []),
         key.name,
       ].join("+"),
@@ -173,6 +194,9 @@ export function keyAction(
   } catch {
     return undefined;
   }
+
+  const winners = resolvedContexts.get(bindings)?.[context];
+  if (winners) return winners.get(normalized);
 
   // An explicit context action takes priority over a global interrupt whose
   // binding survived in the other context.

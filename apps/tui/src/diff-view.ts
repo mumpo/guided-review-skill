@@ -44,6 +44,7 @@ import {
   resolveKeybindings,
   type Keybindings,
 } from "../../../packages/preferences/src/keybindings";
+import { SearchText, revealSearch, type SearchTarget } from "./search";
 import { cursorBackground } from "./cursor-highlight";
 
 interface CursorRow {
@@ -51,6 +52,8 @@ interface CursorRow {
   file: string;
   targets: CommentTarget[];
   header?: boolean;
+  textKey?: string;
+  text?: SearchText;
 }
 
 export interface Draft {
@@ -78,7 +81,7 @@ export class DiffView extends BoxRenderable {
   private changes: ChangedSpans = new Map();
   private preference: DiffMode = "auto";
   private palette: Theme;
-  private painted: { node: TextRenderable; cell: DiffCell }[] = [];
+  private painted: { node: SearchText; cell: DiffCell }[] = [];
   private logical: {
     node: BoxRenderable | TextRenderable;
     file: string;
@@ -89,9 +92,9 @@ export class DiffView extends BoxRenderable {
     file: FileRows;
     box: BoxRenderable;
     chevron: TextRenderable;
-    path: TextRenderable;
-    added: TextRenderable;
-    deleted: TextRenderable;
+    path: SearchText;
+    added: SearchText;
+    deleted: SearchText;
     content: BoxRenderable;
   }[] = [];
   private signature = "";
@@ -104,13 +107,15 @@ export class DiffView extends BoxRenderable {
   }[] = [];
   private cursorRows: CursorRow[] = [];
   private selected?: CommentTarget;
+  private selectedText?: string;
+  private searchEntries: (SearchTarget & { order: number[] })[] = [];
   private selectedHeader?: string;
   private preferredSide: "old" | "new" = "new";
   private cursorActive = true;
   private active?: CommentTarget;
   private editor?: TextareaRenderable;
   private commentBoxes: BoxRenderable[] = [];
-  private commentText: TextRenderable[] = [];
+  private commentText: SearchText[] = [];
   private columns?: number;
   private onComments = () => this.preserve(() => this.rebuild());
 
@@ -127,7 +132,112 @@ export class DiffView extends BoxRenderable {
   }
 
   get cursorFile() {
-    return this.selectedHeader ?? this.selected?.fileId;
+    return (
+      this.selectedHeader ??
+      this.selected?.fileId ??
+      this.cursorRows.find((row) => row.textKey === this.selectedText)?.file
+    );
+  }
+
+  searchTargets(): SearchTarget[] {
+    return this.searchEntries;
+  }
+
+  private addSearchTarget(
+    id: string,
+    node: SearchText,
+    file: string,
+    row: CursorRow,
+    offset = 0,
+    text = node.plainText,
+    target?: CommentTarget,
+    order: number[] = [-1, this.searchEntries.length],
+  ) {
+    const entry: SearchTarget & { order: number[] } = {
+      order: [
+        this.files.findIndex((candidate) => candidate.id === file),
+        ...order,
+      ],
+      id,
+      node,
+      text,
+      offset,
+      selected: () =>
+        this.cursorActive &&
+        this.matchesCursor(row) &&
+        (!target || this.isSelected(target) === true),
+      focus: (character: number) => {
+        this.anchorEpoch++;
+        if (this.collapsed.has(file)) this.toggleFile(file);
+        this.selectRow(row);
+        if (target) {
+          this.selected = target;
+          this.preferredSide = target.side;
+        }
+        this.cursorActive = true;
+        this.setTheme(this.palette);
+        revealSearch(this.body, node, offset + character);
+      },
+    };
+    this.searchEntries.push(entry);
+    return entry;
+  }
+
+  private indexSearchRow(
+    file: FileRows,
+    sources: number[],
+    start: number,
+    row: CursorRow,
+  ) {
+    const cells = this.painted.slice(start);
+    for (const source of sources) {
+      const original = file.rows[source];
+      const line = original.line;
+      const matches = cells.filter(({ cell }) =>
+        line?.kind === "no-newline"
+          ? cell.line === line || cell.text === line.raw.replace(/\r?\n$/, "")
+          : cell.line === line && (line || cell.text.trim()),
+      );
+      if (!matches.length) continue;
+
+      const primary =
+        matches.find(({ cell }) => cell.side === "new") ?? matches[0];
+      const sourceText = line && line.kind !== "no-newline";
+      const offset =
+        primary.cell.prefix.replaceAll(" | ", "   ").length +
+        (sourceText ? 1 : 0);
+      let focusRow = row;
+      if (line?.kind === "no-newline" && row.targets.length) {
+        focusRow = {
+          node: primary.node,
+          file: file.id,
+          targets: [],
+          textKey: `${file.id}:marker:${source}`,
+          text: primary.node,
+        };
+        this.cursorRows.push(focusRow);
+      }
+      const target = focusRow.targets.find(
+        (target) => target.side === primary.cell.side,
+      );
+      const entry = this.addSearchTarget(
+        `${file.id}:source:${source}`,
+        primary.node,
+        file.id,
+        focusRow,
+        offset,
+        sourceText ? primary.cell.text.slice(1) : primary.cell.text,
+        target,
+        [source, 0],
+      );
+      entry.mirrors = matches
+        .filter((other) => other !== primary)
+        .map(({ node, cell }) => ({
+          node,
+          offset:
+            cell.prefix.replaceAll(" | ", "   ").length + (sourceText ? 1 : 0),
+        }));
+    }
   }
 
   focusFile(id: string) {
@@ -180,6 +290,7 @@ export class DiffView extends BoxRenderable {
     this.captureEditor();
     this.active = undefined;
     this.selected = undefined;
+    this.selectedText = undefined;
     this.selectedHeader = undefined;
     this.preferredSide = "new";
     this.anchorEpoch++;
@@ -304,17 +415,22 @@ export class DiffView extends BoxRenderable {
 
   private visibleCursorRows() {
     return this.cursorRows.filter(
-      (row) => row.header || !this.collapsed.has(row.file),
+      (row) =>
+        (row.header || !this.collapsed.has(row.file)) &&
+        (!row.textKey || row.textKey === this.selectedText),
     );
   }
 
   private matchesCursor(row: CursorRow) {
     return row.header
       ? this.selectedHeader === row.file
-      : row.targets.some((target) => this.isSelected(target));
+      : row.textKey
+        ? this.selectedText === row.textKey
+        : row.targets.some((target) => this.isSelected(target));
   }
 
   private selectRow(row?: CursorRow) {
+    this.selectedText = row?.textKey;
     this.selectedHeader = row?.header ? row.file : undefined;
     this.selected = row?.header
       ? undefined
@@ -477,7 +593,7 @@ export class DiffView extends BoxRenderable {
   }
 
   toggleVisibleFile() {
-    const selectedFile = this.selectedHeader ?? this.selected?.fileId;
+    const selectedFile = this.cursorFile;
     if (this.cursorActive && selectedFile) {
       this.toggleFile(selectedFile);
       return true;
@@ -563,19 +679,19 @@ export class DiffView extends BoxRenderable {
       file.oldPath && file.newPath && file.oldPath !== file.newPath
         ? `${file.oldPath} → ${file.newPath}`
         : (file.newPath ?? file.oldPath ?? file.id);
-    const path = new TextRenderable(this.renderer, {
+    const path = new SearchText(this.renderer, {
       content: name,
       flexGrow: 1,
       flexBasis: 0,
       minWidth: 0,
       wrapMode: "char",
     });
-    const added = new TextRenderable(this.renderer, {
+    const added = new SearchText(this.renderer, {
       content: `+${file.additions ?? 0}`,
       attributes: TextAttributes.BOLD,
       flexShrink: 0,
     });
-    const deleted = new TextRenderable(this.renderer, {
+    const deleted = new SearchText(this.renderer, {
       content: `-${file.deletions ?? 0}`,
       attributes: TextAttributes.BOLD,
       flexShrink: 0,
@@ -587,12 +703,24 @@ export class DiffView extends BoxRenderable {
     this.add(content);
     this.headers.push({ file, box, chevron, path, added, deleted, content });
     this.logical.push({ node: box, file: file.id, sources: [0] });
-    this.cursorRows.push({
+    const cursorRow: CursorRow = {
       node: box,
       file: file.id,
       targets: [],
       header: true,
-    });
+    };
+    this.cursorRows.push(cursorRow);
+    for (const [label, node] of [
+      ["path", path],
+      ["added", added],
+      ["deleted", deleted],
+    ] as const)
+      this.addSearchTarget(
+        `${file.id}:header:${label}`,
+        node,
+        file.id,
+        cursorRow,
+      );
 
     return content;
   }
@@ -610,6 +738,7 @@ export class DiffView extends BoxRenderable {
     this.cursorRows = [];
     this.commentBoxes = [];
     this.commentText = [];
+    this.searchEntries = [];
     this.signature = this.layoutSignature();
     if (!this.files.length) return;
 
@@ -655,6 +784,7 @@ export class DiffView extends BoxRenderable {
           seenHunk = true;
           continue;
         }
+        const paintedStart = this.painted.length;
         let node: BoxRenderable | TextRenderable;
         if (row.full) {
           const full = row.full;
@@ -753,7 +883,28 @@ export class DiffView extends BoxRenderable {
               });
             }
           }
+          this.indexSearchRow(
+            file,
+            row.sources,
+            paintedStart,
+            this.cursorRows[this.cursorRows.length - 1],
+          );
           this.renderComments(content, commentTargets, mode);
+        } else {
+          const text = this.painted
+            .slice(paintedStart)
+            .find(
+              ({ cell }) => cell.role !== "marker" || cell.text.trim(),
+            )?.node;
+          const cursorRow: CursorRow = {
+            node,
+            file: file.id,
+            targets: [],
+            textKey: `${file.id}:marker:${row.sources.join(",")}`,
+            text,
+          };
+          this.cursorRows.push(cursorRow);
+          this.indexSearchRow(file, row.sources, paintedStart, cursorRow);
         }
       }
     });
@@ -783,6 +934,17 @@ export class DiffView extends BoxRenderable {
       } else this.selectRow(this.visibleCursorRows()[0]);
     }
 
+    this.searchEntries.sort((left, right) => {
+      for (
+        let index = 0;
+        index < Math.max(left.order.length, right.order.length);
+        index++
+      ) {
+        const difference = (left.order[index] ?? 0) - (right.order[index] ?? 0);
+        if (difference) return difference;
+      }
+      return 0;
+    });
     this.setTheme(this.palette);
     if (this.editor) {
       const editor = this.editor as TextareaRenderable;
@@ -837,17 +999,51 @@ export class DiffView extends BoxRenderable {
         paddingRight: 1,
       });
       this.commentBoxes.push(box);
-      const text = (value: string) => {
-        const node = new TextRenderable(this.renderer, {
-          content: value,
-          width: "100%",
-          wrapMode: "word",
-          flexShrink: 0,
-          fg: this.palette.text,
-          bg: this.palette.surface,
-        });
-        this.commentText.push(node);
-        box.add(node);
+      let textIndex = 0;
+      const text = (value: string, searchable = true) => {
+        for (const line of value.split("\n")) {
+          const node = new SearchText(this.renderer, {
+            content: line,
+            width: "100%",
+            minHeight: 1,
+            wrapMode: "word",
+            flexShrink: 0,
+            fg: this.palette.text,
+            bg: this.palette.surface,
+          });
+          this.commentText.push(node);
+          box.add(node);
+          const textKey = `comment:${key}:${textIndex++}`;
+          const cursorRow: CursorRow = {
+            node,
+            file: target.fileId,
+            targets: [],
+            textKey,
+            text: node,
+          };
+          this.cursorRows.push(cursorRow);
+          if (searchable) {
+            const source =
+              this.files
+                .find((file) => file.id === target.fileId)
+                ?.rows.findIndex(
+                  ({ line }) =>
+                    line &&
+                    (target.side === "old" ? line.oldLine : line.newLine) ===
+                      target.line,
+                ) ?? 0;
+            this.addSearchTarget(
+              textKey,
+              node,
+              target.fileId,
+              cursorRow,
+              0,
+              line,
+              undefined,
+              [source, 1, textIndex],
+            );
+          }
+        }
       };
 
       text(
@@ -878,6 +1074,7 @@ export class DiffView extends BoxRenderable {
             draft.pending
               ? "Publishing…"
               : `${this.bindings.close_comment.join("/") || "unbound"}: close · ${this.bindings.publish_comment.join("/") || "unbound"}: publish`,
+            false,
           );
           if (draft.error) text(draft.error);
         }
@@ -896,7 +1093,7 @@ export class DiffView extends BoxRenderable {
   }
 
   private text(cell: DiffCell, width: number | "100%" = "100%") {
-    const node = new TextRenderable(this.renderer, {
+    const node = new SearchText(this.renderer, {
       content: "",
       width,
       minWidth: 0,
@@ -953,7 +1150,12 @@ export class DiffView extends BoxRenderable {
 
     const selectedCells = new Set(selectedBoxes.map(({ cell }) => cell));
     for (const { node, cell } of this.painted) {
-      const selected = selectedCells.has(cell);
+      const selected =
+        selectedCells.has(cell) ||
+        (this.cursorActive &&
+          this.cursorRows.some(
+            (row) => row.textKey === this.selectedText && row.text === node,
+          ));
       const highlight = (background: string) =>
         selected ? cursorBackground(background, theme.name) : background;
       const changed = cell.role === "addition" || cell.role === "deletion";
@@ -1034,7 +1236,13 @@ export class DiffView extends BoxRenderable {
     }
     for (const node of this.commentText) {
       node.fg = theme.text;
-      node.bg = theme.surface;
+      node.bg =
+        this.cursorActive &&
+        this.cursorRows.some(
+          (row) => row.textKey === this.selectedText && row.text === node,
+        )
+          ? cursorBackground(theme.surface, theme.name)
+          : theme.surface;
     }
     if (this.editor) {
       this.editor.backgroundColor = theme.background;

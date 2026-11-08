@@ -10,6 +10,7 @@ import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import { resolveKeybindings } from "../../../packages/preferences/src";
 import { mountReview } from "./view";
+import { selectedDocumentPart as selectedPart } from "./view-test-utils";
 import { sessionHighlights } from "./highlight-service";
 import { themes } from "./theme";
 import { cursorBackground } from "./cursor-highlight";
@@ -33,9 +34,6 @@ for (const theme of Object.values(themes)) {
         const sidebar = ui.renderer.root.findDescendantById(
           "sidebar",
         ) as ScrollBoxRenderable;
-        const heading = ui.renderer.root.findDescendantById(
-          "heading",
-        ) as TextRenderable;
         const press = async (...keys: string[]) => {
           await ui.mockInput.pressKeys(keys);
           await ui.renderOnce();
@@ -43,9 +41,9 @@ for (const theme of Object.values(themes)) {
         expect(sidebar.visible).toBe(true);
         expect(body.getChildren()).toHaveLength(4);
         await press("n", "p", "h", "l", "\u001b[C", "\u001b[D");
-        expect(heading.plainText).toContain("Summary");
+        expect(selectedPart(ui.renderer)).toBe(0);
         await press("\u000e");
-        expect(heading.plainText).toContain("Section 1/3");
+        expect(selectedPart(ui.renderer)).toBe(1);
         expect(body.scrollTop).toBeGreaterThan(0);
         const sectionTop = body.scrollTop;
         await press("\t");
@@ -64,13 +62,13 @@ for (const theme of Object.values(themes)) {
         ) as TextRenderable;
         await ui.mockMouse.click(nextSection.x + 1, nextSection.y);
         await ui.renderOnce();
-        expect(heading.plainText).toContain("Section 2/3");
+        expect(selectedPart(ui.renderer)).toBe(2);
         await press("\u0010", "\u0010", "\u0010");
         expect(body.scrollTop).toBe(0);
         await press("\u001b[Z");
         expect(body.scrollTop).toBe(0);
         await press(...Array(20).fill("\t"));
-        expect(heading.plainText).toContain("Section 3/3");
+        expect(selectedPart(ui.renderer)).toBe(3);
         await press("s");
         expect(body.scrollTop).toBe(0);
       } finally {
@@ -99,18 +97,15 @@ test("custom keys, conflict winner, help, sidebar widths, and removed interrupts
     const body = ui.renderer.root.findDescendantById(
       "body",
     ) as ScrollBoxRenderable;
-    const heading = ui.renderer.root.findDescendantById(
-      "heading",
-    ) as TextRenderable;
     const width = body.viewport.width;
     await ui.mockInput.pressKeys(["x"]);
     await ui.renderOnce();
     expect(sidebar.visible).toBe(false);
     expect(body.viewport.width).toBeGreaterThan(width);
-    expect(heading.plainText).toContain("Summary");
+    expect(selectedPart(ui.renderer)).toBe(0);
     await ui.mockInput.pressKeys(["f"]);
     await ui.renderOnce();
-    expect(heading.plainText).toContain("Section 1/3");
+    expect(selectedPart(ui.renderer)).toBe(1);
     expect(ui.captureCharFrame()).toContain(
       "unbound next section  ^p prev section",
     );
@@ -144,13 +139,10 @@ test("one cursor crosses section boundaries in both directions and tracks the si
     await sessionHighlights(ui.renderer).settled();
     await ui.mockInput.pressKeys(["\u000e", "j", "j"]);
     await ui.renderOnce();
-    const heading = ui.renderer.root.findDescendantById(
-      "heading",
-    ) as TextRenderable;
     const second = ui.renderer.root.findDescendantById(
       "navigation-2",
     ) as TextRenderable;
-    expect(heading.plainText).toContain("Section 2/2");
+    expect(selectedPart(ui.renderer)).toBe(2);
     expect(
       second.bg?.equals(
         RGBA.fromHex(
@@ -160,13 +152,13 @@ test("one cursor crosses section boundaries in both directions and tracks the si
     ).toBe(true);
     await ui.mockInput.pressKeys(["k"]);
     await ui.renderOnce();
-    expect(heading.plainText).toContain("Section 1/2");
+    expect(selectedPart(ui.renderer)).toBe(1);
     expect(second.bg?.equals(RGBA.fromHex(themes["github-dark"].surface))).toBe(
       true,
     );
     await ui.mockInput.pressKeys(["\t"]);
     await ui.renderOnce();
-    expect(heading.plainText).toContain("Section 2/2");
+    expect(selectedPart(ui.renderer)).toBe(2);
   } finally {
     await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
@@ -367,11 +359,8 @@ for (const mode of ["inline", "side-by-side"] as const) {
       const workspace = ui.renderer.root.findDescendantById(
         "workspace",
       ) as BoxRenderable;
-      const heading = ui.renderer.root.findDescendantById(
-        "heading",
-      ) as TextRenderable;
       const expected =
-        "j move down  k move up  ^n next section  ^p prev section  tab next item  shift+tab prev item  ? keybindings";
+        "j move down  k move up  ^n next section  ^p prev section  tab next item  shift+tab prev item  / search  ? keybindings";
 
       expect(footer.plainText).toBe(expected);
       expect(footer.height).toBe(1);
@@ -415,13 +404,13 @@ for (const mode of ["inline", "side-by-side"] as const) {
         expect(footer.fg?.equals(RGBA.fromHex(theme.muted))).toBe(true);
         await ui.mockInput.pressKeys(["\u000e"]);
         await ui.renderOnce();
-        expect(heading.plainText).toContain("Summary");
+        expect(selectedPart(ui.renderer)).toBe(0);
         const nextSection = ui.renderer.root.findDescendantById(
           "navigation-1",
         ) as TextRenderable;
         await ui.mockMouse.click(nextSection.x + 1, nextSection.y);
         await ui.renderOnce();
-        expect(heading.plainText).toContain("Summary");
+        expect(selectedPart(ui.renderer)).toBe(0);
 
         ui.resize(60, 14);
         await ui.renderOnce();

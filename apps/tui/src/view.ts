@@ -1,5 +1,7 @@
 import {
   BoxRenderable,
+  InputRenderable,
+  InputRenderableEvents,
   RGBA,
   StyledText,
   type CliRenderer,
@@ -21,16 +23,17 @@ import { PullRequestHeader } from "./pr-header";
 import { githubCommentPublisher, type PublishComment } from "./comments";
 import { CursorText } from "./cursor-text";
 import { cursorBackground } from "./cursor-highlight";
+import { DocumentSearch, SearchText, type SearchTarget } from "./search";
 import { PageCursor } from "./page-cursor";
 import {
   keyAction,
   actionKeys,
   resolveKeybindings,
   type Keybindings,
+  type KeyContext,
 } from "../../../packages/preferences/src/keybindings";
 
 interface DocumentPart {
-  title: string;
   root: BoxRenderable;
   narrative: BoxRenderable;
   changes: DiffView;
@@ -82,12 +85,48 @@ export function mountReview(
     paddingLeft: 1,
     paddingRight: 1,
   });
-  const heading = new TextRenderable(renderer, {
-    id: "heading",
-    content: "",
-    wrapMode: "word",
+  const search = new DocumentSearch();
+  let searchRevision = -1;
+  let searchState: "inactive" | "editing" | "committed" = "inactive";
+  const searchBar = new BoxRenderable(renderer, {
+    id: "search-bar",
+    width: "100%",
+    flexShrink: 0,
+    flexDirection: "column",
+    visible: false,
+  });
+  const searchRow = new BoxRenderable(renderer, {
+    width: "100%",
+    height: 1,
+    flexDirection: "row",
+  });
+  const searchPrompt = new TextRenderable(renderer, { content: "/", width: 1 });
+  const searchInput = new InputRenderable(renderer, {
+    id: "search-input",
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    placeholder: "Search (\\c ignores case)",
+  });
+  const searchQuery = new TextRenderable(renderer, {
+    id: "search-query",
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    height: 1,
+    truncate: true,
+    visible: false,
+  });
+  const searchCount = new TextRenderable(renderer, {
+    id: "search-count",
     flexShrink: 0,
   });
+  searchRow.add(searchPrompt);
+  searchRow.add(searchInput);
+  searchRow.add(searchQuery);
+  searchRow.add(searchCount);
+  searchBar.add(searchRow);
+  separator(searchBar, "search-separator", 0);
   const workspace = new BoxRenderable(renderer, {
     id: "workspace",
     width: "100%",
@@ -123,7 +162,7 @@ export function mountReview(
   });
   workspace.add(sidebar);
   workspace.add(body);
-  root.add(heading);
+  root.add(searchBar);
   root.add(workspace);
   const keybindingsOverlay = new BoxRenderable(renderer, {
     id: "keybindings-overlay",
@@ -325,7 +364,6 @@ export function mountReview(
       changes,
     );
     parts.push({
-      title: index === 0 ? "Summary" : section.title,
       root: container,
       narrative,
       changes,
@@ -350,10 +388,7 @@ export function mountReview(
   }
 
   function updateHelp() {
-    const label = (
-      action: keyof Keybindings,
-      context: "viewer" | "editor" = "viewer",
-    ) =>
+    const label = (action: keyof Keybindings, context: KeyContext = "viewer") =>
       actionKeys(bindings, action, context)
         .map((key) => key.replaceAll("ctrl+", "^"))
         .join("/") || "unbound";
@@ -382,6 +417,11 @@ export function mountReview(
       interrupt: "interrupt/quit",
       close_comment: "close comment editor",
       publish_comment: "publish comment",
+      open_search: "search",
+      clear_search: "clear search",
+      submit_search: "commit search",
+      next_match: "next match",
+      previous_match: "previous match",
     };
     const chunk = (text: string, color: string) => ({
       __isChunk: true as const,
@@ -395,6 +435,7 @@ export function mountReview(
       "previous_section",
       "next_item",
       "previous_item",
+      "open_search",
       "toggle_help",
     ] as const;
     help.content = new StyledText(
@@ -407,7 +448,7 @@ export function mountReview(
     const groups: {
       title: string;
       actions: (keyof Keybindings)[];
-      editor?: boolean;
+      context?: KeyContext;
     }[] = [
       {
         title: "Navigation",
@@ -443,13 +484,27 @@ export function mountReview(
         ],
       },
       {
+        title: "Search",
+        actions: [
+          "open_search",
+          "next_match",
+          "previous_match",
+          "clear_search",
+        ],
+      },
+      {
+        title: "Search input",
+        actions: ["submit_search", "clear_search", "interrupt"],
+        context: "search",
+      },
+      {
         title: "Application",
         actions: ["toggle_sidebar", "toggle_help", "quit", "interrupt"],
       },
       {
         title: "Comment editor",
         actions: ["close_comment", "publish_comment", "interrupt"],
-        editor: true,
+        context: "editor",
       },
     ];
     const columnWidth = Math.max(
@@ -457,7 +512,7 @@ export function mountReview(
       ...groups.flatMap((group) =>
         group.actions.map(
           (action) =>
-            displayWidth(label(action, group.editor ? "editor" : "viewer")) + 2,
+            displayWidth(label(action, group.context ?? "viewer")) + 2,
         ),
       ),
     );
@@ -469,7 +524,7 @@ export function mountReview(
           theme.navigation.foreground,
         ),
         ...group.actions.flatMap((action) => {
-          const key = label(action, group.editor ? "editor" : "viewer");
+          const key = label(action, group.context ?? "viewer");
           return [
             chunk(`  ${key}`, theme.text),
             chunk(
@@ -490,7 +545,6 @@ export function mountReview(
     const changed = index !== selectedEntry;
     if (!changed && !force) return;
     selectedEntry = index;
-    heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${active === 0 ? "Summary" : `Section ${active}/${snapshot.sections.length}: ${parts[active].title}`}\n`;
     for (const [i, entry] of entries.entries()) {
       const section = entry.part > 0 && !entry.file;
       const foreground =
@@ -621,8 +675,18 @@ export function mountReview(
     theme = next;
     renderer.setBackgroundColor(theme.background);
     root.backgroundColor = theme.background;
-    heading.fg = theme.navigation.foreground;
-    heading.bg = theme.navigation.background;
+    searchBar.backgroundColor = theme.surface;
+    searchInput.backgroundColor = theme.surface;
+    searchInput.focusedBackgroundColor = theme.surface;
+    searchInput.textColor = theme.text;
+    searchInput.focusedTextColor = theme.text;
+    searchQuery.fg = theme.text;
+    searchQuery.bg = theme.surface;
+    searchPrompt.fg = theme.text;
+    searchPrompt.bg = theme.surface;
+    searchCount.fg = theme.muted;
+    searchCount.bg = theme.surface;
+    if (searchState !== "inactive") updateSearch();
     help.fg = theme.muted;
     help.bg = theme.background;
     keybindingsModal.backgroundColor = theme.surface;
@@ -668,9 +732,112 @@ export function mountReview(
     paintSidebar(true);
   }
 
+  function searchTargets(): SearchTarget[] {
+    const targets: SearchTarget[] = [];
+    parts.forEach((part, index) => {
+      const activate = () => {
+        navigationEpoch++;
+        if (active !== index) parts[active].cursor.deactivate();
+        active = index;
+      };
+      const walk = (node: Renderable, path: string) => {
+        if (!node.visible || node.isDestroyed) return;
+        if (node instanceof CursorText) {
+          if (!node.cursorEnabled) return;
+
+          targets.push(
+            ...node.searchTargets(path, body, (line) => {
+              activate();
+              part.cursor.focusText(node, line);
+              paintSidebar();
+            }),
+          );
+          return;
+        }
+        node.getChildren().forEach((child, childIndex) => {
+          walk(child, `${path}:${childIndex}`);
+        });
+      };
+      walk(part.narrative, `${index}:narrative`);
+      if (part.explanation) walk(part.explanation, `${index}:explanation`);
+      for (const target of part.changes.searchTargets()) {
+        targets.push({
+          ...target,
+          id: `${index}:diff:${target.id}`,
+          focus: (offset) => {
+            activate();
+            part.cursor.focusDiff(() => target.focus(offset));
+            paintSidebar();
+          },
+        });
+      }
+    });
+    return targets;
+  }
+
+  function updateSearch() {
+    const targets = searchTargets();
+    search.update(targets, theme.search);
+    searchRevision = SearchText.revision;
+    const count = search.matches.length;
+    const current = search.focused
+      ? search.matches.indexOf(search.focused) + 1
+      : 0;
+    const label = search.query.replaceAll("\\c", "")
+      ? count
+        ? ` ${current}/${count} `
+        : " No matches "
+      : "";
+    if (searchCount.plainText !== label) searchCount.content = label;
+    return targets;
+  }
+
+  function clearSearch() {
+    const release = anchorViewport();
+    searchInput.blur();
+    searchState = "inactive";
+    search.query = "";
+    search.focused = undefined;
+    updateSearch();
+    searchBar.visible = false;
+    body.afterLayout(release);
+  }
+
+  function openSearch() {
+    const release = anchorViewport();
+    searchState = "editing";
+    search.query = "";
+    search.focused = undefined;
+    searchInput.value = "";
+    searchInput.visible = true;
+    searchQuery.visible = false;
+    searchBar.visible = true;
+    searchInput.focus();
+    updateSearch();
+    body.afterLayout(release);
+  }
+
+  function navigateSearch(direction: 1 | -1, initial = false) {
+    const targets = updateSearch();
+    search.navigate(targets, direction, initial);
+    updateSearch();
+  }
+
+  searchInput.on(InputRenderableEvents.INPUT, () => {
+    if (searchState !== "editing") return;
+
+    search.query = searchInput.value;
+    search.focused = undefined;
+    updateSearch();
+  });
+
   function onKey(key: KeyEvent) {
     const editor = parts.find((part) => part.changes.editing)?.changes;
-    const action = keyAction(bindings, key, editor ? "editor" : "viewer");
+    const action = keyAction(
+      bindings,
+      key,
+      editor ? "editor" : searchState === "editing" ? "search" : "viewer",
+    );
     if (action === "interrupt") {
       key.preventDefault();
       renderer.destroy();
@@ -695,9 +862,38 @@ export function mountReview(
       key.preventDefault();
       return;
     }
+    if (searchState === "editing") {
+      if (action === "clear_search") {
+        clearSearch();
+        key.preventDefault();
+      } else if (action === "submit_search") {
+        key.preventDefault();
+        if (!search.query.replaceAll("\\c", "")) clearSearch();
+        else {
+          searchState = "committed";
+          searchInput.blur();
+          searchInput.visible = false;
+          searchQuery.content = search.query;
+          searchQuery.visible = true;
+          navigateSearch(1, true);
+        }
+      }
+      return;
+    }
     if (!action) return;
     const part = parts[active];
     switch (action) {
+      case "open_search":
+        openSearch();
+        break;
+      case "clear_search":
+        if (searchState !== "inactive") clearSearch();
+        break;
+      case "next_match":
+      case "previous_match":
+        if (searchState === "committed")
+          navigateSearch(action === "next_match" ? 1 : -1);
+        break;
       case "toggle_help":
         keybindingsOverlay.visible = true;
         break;
@@ -817,6 +1013,8 @@ export function mountReview(
   const onFrame = () => {
     for (const part of parts) part.explanation?.checkGeometry();
     parts[active].cursor.refresh();
+    if (searchState !== "inactive" && searchRevision !== SearchText.revision)
+      updateSearch();
     paintSidebar();
   };
   const onCapabilities = () => {

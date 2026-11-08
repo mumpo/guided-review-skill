@@ -1,12 +1,13 @@
 import {
   BoxRenderable,
   type CliRenderer,
+  type ScrollBoxRenderable,
   RGBA,
   StyledText,
   type TextChunk,
   type TextOptions,
-  TextRenderable,
 } from "@opentui/core";
+import { SearchText, type SearchTarget, revealSearch } from "./search";
 import { cursorBackground } from "./cursor-highlight";
 import type { ThemeName } from "./theme";
 
@@ -15,7 +16,7 @@ export class CursorText extends BoxRenderable {
   private source = new StyledText([]);
   private rows: {
     box: BoxRenderable;
-    text: TextRenderable;
+    text: SearchText;
     chunks: TextChunk[];
   }[] = [];
   private cursorTheme: ThemeName = "github-dark";
@@ -76,7 +77,7 @@ export class CursorText extends BoxRenderable {
           flexDirection: "column",
           backgroundColor: this.backgroundColor,
         });
-        const text = new TextRenderable(this.renderer, {
+        const text = new SearchText(this.renderer, {
           width: "100%",
           minWidth: 0,
           minHeight: 1,
@@ -96,6 +97,28 @@ export class CursorText extends BoxRenderable {
     });
 
     this.paintCursor();
+  }
+
+  searchTargets(
+    id: string,
+    body: ScrollBoxRenderable,
+    focus: (line: number) => void,
+  ): SearchTarget[] {
+    return this.rows.map(({ text, chunks }, line) => {
+      const value = chunks.map((chunk) => chunk.text).join("");
+      const target: SearchTarget = {
+        id: `${id}:${line}`,
+        text: value,
+        node: text,
+        offset: 0,
+        focus: (character) => {
+          focus(line);
+          revealSearch(body, text, character);
+        },
+        selected: () => this.selectedLine === line,
+      };
+      return target;
+    });
   }
 
   get plainText() {
@@ -143,7 +166,17 @@ export class CursorText extends BoxRenderable {
   }
 
   cursorLines(): number[] {
-    return this.cursorEnabled ? this.logicalLines : [];
+    if (!this.cursorEnabled) return [];
+    if (
+      this.selectedLine !== undefined &&
+      this.rows[this.selectedLine] &&
+      !this.logicalLines.includes(this.selectedLine)
+    )
+      return [...this.logicalLines, this.selectedLine].sort(
+        (left, right) => left - right,
+      );
+
+    return this.logicalLines;
   }
 
   lineBounds(line: number) {

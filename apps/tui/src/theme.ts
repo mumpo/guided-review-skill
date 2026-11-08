@@ -25,6 +25,10 @@ export interface Theme {
     closed: string;
     branch: { foreground: string; background: string };
   };
+  search: {
+    match: { foreground: string; background: string };
+    focused: { foreground: string; background: string };
+  };
   navigation: { foreground: string; background: string };
   scrollbar: { foreground: string; background: string };
   diff: {
@@ -82,6 +86,10 @@ export const themes: Record<ThemeName, Theme> = {
       merged: "#8250df",
       closed: "#cf222e",
       branch: { foreground: "#0969da", background: "#ddf4ff" },
+    },
+    search: {
+      match: { foreground: "#1f2328", background: "#fff8c5" },
+      focused: { foreground: "#ffffff", background: "#9a6700" },
     },
     navigation: { foreground: "#0969da", background: "#f6f8fa" },
     scrollbar: { foreground: "#59636e", background: "#f6f8fa" },
@@ -143,6 +151,10 @@ export const themes: Record<ThemeName, Theme> = {
       closed: "#da3633",
       // Primer accent-muted (#388bfd1a) flattened over #0d1117.
       branch: { foreground: "#4493f8", background: "#111d2e" },
+    },
+    search: {
+      match: { foreground: "#e6edf3", background: "#5a4510" },
+      focused: { foreground: "#0d1117", background: "#e3b341" },
     },
     navigation: { foreground: "#79c0ff", background: "#161b22" },
     scrollbar: { foreground: "#9198a1", background: "#161b22" },
