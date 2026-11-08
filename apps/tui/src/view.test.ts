@@ -6,6 +6,7 @@ import { mountReview } from "./view";
 import {
   type BoxRenderable,
   RGBA,
+  type TextRenderable,
   type ScrollBoxRenderable,
 } from "@opentui/core";
 import { themes } from "./theme";
@@ -128,7 +129,8 @@ test("both themes paint explicit readable colors without changing displayed cont
         theme.navigation.background,
       );
       expectColor("Update the greeting", theme.text, theme.background);
-      expectColor("q/ctrl+c: quit", theme.muted, theme.surface);
+      expectColor("?", theme.text, theme.background);
+      expectColor("keybindings", theme.muted, theme.background);
 
       // The viewport margin is painted too, even when the terminal has the opposite appearance.
       expect(spans()[0].bg.equals(RGBA.fromHex(theme.background))).toBe(true);
@@ -397,7 +399,7 @@ test("long explanations scroll, wrap on resize, and reset when changing sections
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).not.toContain("Narrative line 1:");
-    expect(ui.captureCharFrame()).toContain("q/ctrl+c: quit");
+    expect(ui.captureCharFrame()).toContain("? keybindings");
 
     await ui.mockInput.pressKeys([
       "\u001b[5~",
@@ -466,7 +468,13 @@ test("arrows scroll by line, control motions scroll half viewport, and section n
         expect(body.scrollTop).toBe(
           sectionOffset + Math.floor(body.viewport.height / 2),
         );
-        expect(ui.captureCharFrame()).toContain(`d: diff ${mode}`);
+        expect(
+          (
+            ui.renderer.root.findDescendantById(
+              "keybindings-text",
+            ) as TextRenderable
+          ).plainText,
+        ).toContain(`cycle diff layout (${mode})`);
 
         await press("\u0015"); // Ctrl+u
 

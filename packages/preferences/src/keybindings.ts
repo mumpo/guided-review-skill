@@ -19,6 +19,7 @@ export const defaultKeybindings = {
   toggle_file: ["z"],
   cycle_diff_mode: ["d"],
   toggle_sidebar: ["b"],
+  toggle_help: ["?"],
   quit: ["q"],
   interrupt: ["ctrl+c"],
   close_comment: ["escape"],
@@ -54,7 +55,7 @@ export function normalizeBinding(value: string): string {
   const key = parts.pop() ?? "";
   const mods = parts.map((part) => (part === "option" ? "alt" : part));
   if (
-    (!/^[a-z0-9]$/.test(key) && !namedKeys.has(key)) ||
+    (!/^[a-z0-9?]$/.test(key) && !namedKeys.has(key)) ||
     mods.some((mod) => !modifiers.includes(mod)) ||
     new Set(mods).size !== mods.length
   )
