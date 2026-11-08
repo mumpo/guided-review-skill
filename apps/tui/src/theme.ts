@@ -9,6 +9,13 @@ export interface Theme {
   surface: string;
   text: string;
   muted: string;
+  border: string;
+  fileStatus: {
+    added: string;
+    modified: string;
+    deleted: string;
+    renamed: string;
+  };
   pullRequest: {
     number: string;
     badgeForeground: string;
@@ -60,6 +67,13 @@ export const themes: Record<ThemeName, Theme> = {
     surface: "#f6f8fa",
     text: "#1f2328",
     muted: "#59636e",
+    border: "#d1d9e0",
+    fileStatus: {
+      added: "#1a7f37",
+      modified: "#59636e",
+      deleted: "#d1242f",
+      renamed: "#9a6700",
+    },
     pullRequest: {
       number: "#59636e",
       badgeForeground: "#ffffff",
@@ -113,6 +127,13 @@ export const themes: Record<ThemeName, Theme> = {
     surface: "#161b22",
     text: "#e6edf3",
     muted: "#9198a1",
+    border: "#3d444d",
+    fileStatus: {
+      added: "#3fb950",
+      modified: "#9198a1",
+      deleted: "#f85149",
+      renamed: "#d29922",
+    },
     pullRequest: {
       number: "#59636e",
       badgeForeground: "#ffffff",

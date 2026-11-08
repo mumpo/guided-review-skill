@@ -103,3 +103,35 @@ test("unsupported viewer, nested unknown keys, dimensions and custom commands fa
     ).rejects.toThrow(`Invalid viewer configuration ${path}`);
   }
 });
+
+test("keybinding TOML preserves assignment order and reports invalid actions with the config path", async () => {
+  const path = join(temp, "keybindings.toml");
+  await writeFile(
+    path,
+    '[tui.keybindings]\ncursor_down = ["x", "j"]\ntoggle_file = ["x"]\n',
+  );
+  const preferences = await loadPreferences({ config: path }, {});
+
+  expect(preferences.keybindings.cursor_down).toEqual(["j"]);
+  expect(preferences.keybindings.toggle_file).toEqual(["x"]);
+  expect(preferences.keybindings.next_section).toEqual(["ctrl+n"]);
+
+  await writeFile(
+    path,
+    '[tui.keybindings]\ntoggle_file = ["x"]\ncursor_down = ["x", "j"]\n',
+  );
+  expect(
+    (await loadPreferences({ config: path }, {})).keybindings.toggle_file,
+  ).toEqual([]);
+
+  await writeFile(path, '[tui.keybindings]\nunknown_action = ["x"]\n');
+  await expect(loadPreferences({ config: path }, {})).rejects.toThrow(path);
+  await expect(loadPreferences({ config: path }, {})).rejects.toThrow(
+    "unknown_action",
+  );
+
+  await writeFile(path, '[tui.keybindings]\nnext_item = ["bad"]\n');
+  await expect(loadPreferences({ config: path }, {})).rejects.toThrow(
+    "tui.keybindings.next_item",
+  );
+});

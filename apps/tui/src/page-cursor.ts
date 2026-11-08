@@ -32,18 +32,41 @@ export class PageCursor {
     else this.inDiff = this.changes.focusCursor();
   }
 
-  move(direction: number) {
+  deactivate() {
+    this.epoch++;
+    this.clearText();
+    this.inDiff = false;
+    this.changes.setCursorActive(false);
+  }
+
+  get fileId() {
+    return this.inDiff ? this.changes.cursorFile : undefined;
+  }
+
+  focusFile(id: string) {
+    this.clearText();
+    this.inDiff = this.changes.focusFile(id);
+  }
+
+  focusLast() {
+    this.clearText();
+    if (this.changes.focusLastCursor()) this.inDiff = true;
+    else {
+      const lines = this.lines();
+      if (lines.length) this.selectText(lines[lines.length - 1]);
+    }
+  }
+
+  move(direction: number): boolean {
     const lines = this.lines();
     if (this.inDiff) {
-      if (
-        !this.changes.moveCursor(direction) &&
-        direction < 0 &&
-        lines.length
-      ) {
+      if (this.changes.moveCursor(direction)) return true;
+      if (direction < 0 && lines.length) {
         this.selectText(lines[lines.length - 1]);
         this.revealText();
+        return true;
       }
-      return;
+      return false;
     }
 
     const current = lines.findIndex((entry) => this.matches(entry));
@@ -56,11 +79,14 @@ export class PageCursor {
       if (this.changes.focusCursor()) {
         this.clearText();
         this.inDiff = true;
+        return true;
       }
     } else if (next >= 0) {
       this.selectText(lines[next]);
       this.revealText();
+      return true;
     }
+    return false;
   }
 
   /** Mermaid fallback replacement or collapsing all files may remove a target. */

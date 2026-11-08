@@ -59,7 +59,10 @@ test("auto detection prefers calling Herdr, then tmux, then local macOS", () => 
 
 test("custom command preserves argument boundaries and absolute config/viewer/artifact paths", async () => {
   const path = join(temp, "preferences ' $.toml");
-  await writeFile(path, '[tui]\ndiff_mode = "inline"');
+  await writeFile(
+    path,
+    '[tui]\ndiff_mode = "inline"\n[tui.keybindings]\nnext_section = ["x"]',
+  );
   const settings = await loadPreferences({ config: path }, {});
   const artifact = join(temp, "review ' `echo injected` $(echo injected).json");
   const { requests, run } = recorder();
@@ -80,6 +83,14 @@ test("custom command preserves argument boundaries and absolute config/viewer/ar
     detached: true,
   });
   expect(requests[0].argv).toContain(path);
+  expect(
+    (
+      await loadPreferences(
+        { config: requests[0].argv[requests[0].argv.indexOf("--config") + 1] },
+        {},
+      )
+    ).keybindings.next_section,
+  ).toEqual(["x"]);
   expect(requests[0].argv.at(-1)).toBe(artifact);
 });
 

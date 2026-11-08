@@ -22,7 +22,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   const { mountReview } = await import("./view");
   const { startTheme } = await import("./theme-session");
   const renderer = await createCliRenderer({
-    exitOnCtrlC: true,
+    exitOnCtrlC: false,
     screenMode: "alternate-screen",
     consoleMode: "disabled",
     useMouse: true,
@@ -42,6 +42,8 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
             review,
             theme,
             preferences.diffMode,
+            undefined,
+            preferences.keybindings,
           );
       },
       preferences,

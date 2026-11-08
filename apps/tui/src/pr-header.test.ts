@@ -14,7 +14,7 @@ import type { ReviewSnapshot } from "../../../packages/core/src";
 import { loadReview } from "./load";
 import { PullRequestHeader } from "./pr-header";
 import { themes } from "./theme";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 
 const pr: ReviewSnapshot["pullRequest"] = {
   ...fixture.pullRequest,
@@ -199,10 +199,10 @@ test("singular wording, long metadata, scrolling, resizing, navigation and live 
 
       ui.resize(30, 24);
       await ui.renderOnce();
-      await ui.mockInput.pressKeys(["n"]);
+      await ui.mockInput.pressKeys(["\u000e"]);
       await ui.renderOnce();
 
-      expect(ui.renderer.root.findDescendantById("pr-header")).toBeUndefined();
+      expect(ui.renderer.root.findDescendantById("pr-title")).toBe(title);
 
       await ui.mockInput.pressKeys(["s"]);
       await ui.renderOnce();

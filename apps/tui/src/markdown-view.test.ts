@@ -16,7 +16,7 @@ import { ExplanationView } from "./explanation-view";
 import { highlightSource, languageForFence } from "./highlight";
 import { themes } from "./theme";
 import { loadReview } from "./load";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 
 for (const theme of Object.values(themes)) {
   test(`${theme.name}: Markdown paints headings, nested emphasis, code and passive visible links`, async () => {
@@ -393,7 +393,7 @@ test("only the description is displayed while titles, metadata and navigation re
     expect(frame).toContain("[unresolved][summaryOnly]");
     expect(frame).toContain("```mermaid");
 
-    await ui.mockInput.pressKeys(["n"]);
+    await ui.mockInput.pressKeys(["\u000e"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
     frame = ui.captureCharFrame();

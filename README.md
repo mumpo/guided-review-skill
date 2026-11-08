@@ -163,19 +163,22 @@ Try the committed example with `bun run dev:tui skills/guided-review/fixtures/cl
 
 The viewer opens on the PR summary with a bold title and muted PR number. The number is a native terminal hyperlink to the captured GitHub PR; activation follows your terminal's convention (usually Cmd/Ctrl-click). Terminals without hyperlink support still show the number, and the full URL remains visible below. Newly captured reviews also show a GitHub-colored Draft, Open, Merged, or Closed badge, an underlined author, commit count, and blue branch pills. Badge icons use Nerd Fonts' Octicons; select a Nerd Font in your terminal to display them. Status labels remain readable without that font. All metadata reflects collection time; older artifacts show available details without fetching or guessing missing metadata.
 
-The first page also includes captured commit IDs and coverage notices, followed by a horizontal separator and the PR description without an added heading. The generated walkthrough summary remains in the artifact but is not displayed in the TUI. An ordered section list follows the description. Each section shows its explanation and referenced real diff with file paths and old/new line numbers. Each file has a bordered header with a clickable collapse chevron and green addition/red deletion counts for the full captured file. Renames show both paths. Press `z` to toggle the file under the cursor (or the first visible file while reading narrative); collapse state survives theme, layout, and width changes, and resets when navigating sections. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
+The overview also includes captured commit IDs and coverage notices, followed by a horizontal separator and the PR description without an added heading. The generated walkthrough summary remains in the artifact but is not displayed in the TUI. All sections follow the description in one scrollable document, separated by horizontal lines. Each section shows its explanation and referenced real diff with file paths and old/new line numbers. Each file has a bordered header with a clickable collapse chevron and green addition/red deletion counts for the full captured file. Renames show both paths. Press `z` to toggle the file under the cursor (or the first visible file while reading narrative); collapse state survives theme, layout, and width changes, and survives jumps between sections. Optional fenced Mermaid diagrams appear within section explanations. Narrative Markdown uses themed formatting; Mermaid can render as graphics with the optional local setup below.
 
 Line references show only selected changes, with explicit omission markers; whole-file references also show context. Overlapping references in a section are combined in original diff order. Raw Git metadata, hunk labels, and layout labels are hidden; separate hunks retain a blank separator. Binary, unavailable, and metadata-only diffs have explicit markers. Ungrouped sections use the same diff display. Code wraps at the terminal width; scroll to read long sections and wrapped lines.
 
+The left sidebar lists Summary, bulleted sections separated by horizontal lines, and each section’s referenced files in document order. GitHub file icons identify added (green), modified (muted), renamed (amber), and deleted (red) files. Files referenced by multiple sections appear under each section. Long paths retain their trailing portion with a leading `...`; full paths remain in diff headers. Clicking a section or file selects its title or header in the document. The highlighted sidebar entry follows the cursor, including `j`/`k` movement across sections; ordinary scrolling does not move the cursor. The sidebar scrolls independently and keeps the selected entry visible. It defaults to 32 columns and hides below 110 terminal columns. Press `b` to override visibility for this session; on narrow terminals it uses at most 40% of the width.
+
 | Keys | Action |
 | --- | --- |
-| `n`, `l`, `→`, `Tab` | Next section (from the summary, open the first). |
-| `p`, `h`, `←`, `Shift+Tab` | Previous section (from the first, return to summary). |
+| `Ctrl+n` / `Ctrl+p` | Jump to the next/previous section title, skipping files; Summary precedes the first section. |
+| `Tab` / `Shift+Tab` | Jump to the next/previous sidebar destination, including file headers. |
+| `b` | Toggle the sidebar for this session. |
 | `s`, `Home` | Return to summary. |
-| `End` | Open the last section. |
+| `End` | Jump to the last section title. |
 | `j`/`k` | Move the highlighted cursor through narrative lines, file headers, and source rows, scrolling it into view. |
 | `Space` | Switch old/new sides on a paired side-by-side row. |
-| `↑`/`↓`, `PageUp`/`PageDown` | Scroll the current page. |
+| `↑`/`↓`, `PageUp`/`PageDown` | Scroll the document. |
 | `Ctrl+u`/`Ctrl+d` | Scroll up/down half the current viewport height. |
 | `c` | Open a comment editor below the selected source row. |
 | `Esc` (editor) | Close the editor, retaining its draft for this session. |
@@ -184,11 +187,28 @@ Line references show only selected changes, with explicit omission markers; whol
 | `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
+All shortcuts above are defaults. Customize them in your existing `config.toml` using `[tui.keybindings]`; [config.example.toml](config.example.toml) lists every action and its default bindings, including editor close/publish and global interrupt. No configuration file is created or rewritten automatically.
+
+```toml
+[tui.keybindings]
+next_section = ["ctrl+j"]
+previous_section = ["ctrl+k"]
+quit = ["q", "ctrl+q"]
+cursor_down = ["x", "j"]
+toggle_file = ["x"] # Last assignment wins: x folds files; j still moves down.
+```
+
+Each array replaces that action’s defaults; omitted actions keep their defaults and `[]` disables an action. Defaults are resolved first, followed by explicit assignments in configuration order. When normalized bindings collide, only the last assignment remains active for that key in the same context; the earlier action retains its other keys. Conflicts are resolved silently, and help shows the effective bindings. The old `n`/`p`, `h`/`l`, and left/right section shortcuts have no default action, but can be assigned here.
+
+Bindings describe one keypress, such as `j`, `tab`, `shift+tab`, or `ctrl+n`. Names and modifiers are case-insensitive; modifier order is ignored and `option` aliases `alt`. Supported modifiers are `ctrl`, `shift`, `alt`, and `meta`; named keys include `space`, `escape`, `return`, arrows, `home`, `end`, `pageup`, `pagedown`, `backspace`, `delete`, `insert`, and `f1`–`f12`. Letters and digits are supported; key sequences are not. Terminal protocols may not distinguish some combinations (for example, Ctrl+i from Tab), and terminals may intercept others.
+
+Viewer actions are suspended while editing comments. `close_comment` and `publish_comment` apply in the editor; ordinary text editing remains native. `interrupt` is global and defaults to `ctrl+c`. Viewer and editor bindings may reuse keys; global interrupt conflicts resolve in each context. Unknown actions, malformed keys, and invalid TOML fail before terminal initialization. Duplicate TOML property declarations follow the TOML parser’s rules.
+
 Missing or malformed files, unsupported versions, malformed diffs, and invalid change references produce an error with the artifact path and relevant field or file before the terminal UI starts. Uncovered captured changes and binary/unavailable diff limits appear on the summary. A TTY error means the command is being piped or run outside an interactive terminal. Dependencies must already be installed for offline use.
 
 ### Line comments
 
-The cursor starts on the first narrative line of each page. `j`/`k` move through the section title, rendered Markdown lines, file diff headers, and captured source rows in order, including back from the first file header to the explanation. Summary metadata, description, and section-list text use the same navigation. Selected narrative lines use a full-width background highlight that is slightly brighter in dark mode and slightly darker in light mode, retaining Markdown styles and code colors. Wrapped continuations belong to the same logical line, matching wrapped diff rows. The highlight adds no borders, padding, or rows; moving the cursor preserves wrapping and row heights. File headers remain navigable when folded. Folding a selected source row moves the cursor to its file header, where `z` unfolds it again. Blank spacers, list markers, hunk/omission markers, rendered diagram images, and folded source rows are skipped; Mermaid source fallbacks remain navigable text.
+The cursor starts on the overview’s first narrative line; section jumps select their titles. `j`/`k` move through the section title, rendered Markdown lines, file diff headers, and captured source rows in order, including back from the first file header to the explanation. Summary metadata and description use the same navigation. Selected narrative lines use a full-width background highlight that is slightly brighter in dark mode and slightly darker in light mode, retaining Markdown styles and code colors. Wrapped continuations belong to the same logical line, matching wrapped diff rows. The highlight adds no borders, padding, or rows; moving the cursor preserves wrapping and row heights. File headers remain navigable when folded. Folding a selected source row moves the cursor to its file header, where `z` unfolds it again. Blank spacers, list markers, hunk/omission markers, rendered diagram images, and folded source rows are skipped; Mermaid source fallbacks remain navigable text.
 
 The same background highlight spans the selected diff cell, including the full selected pane in side-by-side mode. There is no extra cursor glyph or underline; captured `+`/`-` signs and addition/deletion backgrounds remain visible. Row, gutter, and changed-word backgrounds shift together so addition/deletion colors and word emphasis remain distinct. Paired old/new source stays vertically aligned. In side-by-side mode, entering the diff prefers the right cell when available; Space switches sides, and vertical movement prefers that side. Inline deletions target old lines; additions and context target new lines. `c` and Space act only while a diff source row is selected; selecting Markdown or a file header does not create a GitHub comment target.
 

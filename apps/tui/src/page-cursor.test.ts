@@ -11,7 +11,7 @@ import { createTestRenderer } from "@opentui/core/testing";
 import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
 import { CursorText } from "./cursor-text";
-import { mountReview } from "./view";
+import { mountFullWidthReview as mountReview } from "./view-test-utils";
 import { sessionHighlights } from "./highlight-service";
 import { themes } from "./theme";
 import { PageCursor } from "./page-cursor";
@@ -79,13 +79,17 @@ for (const theme of Object.values(themes)) {
           await ui.mockInput.pressKeys(keys);
           await ui.renderOnce();
         };
-        await press("n");
+        await press("\u000e");
         await sessionHighlights(ui.renderer).settled();
 
         expect(cursorText(ui.renderer.root)).toBe("Greeting");
         expect(ui.captureCharFrame()).not.toContain("▸");
         await press("k", "c", " ");
 
+        expect(cursorText(ui.renderer.root)).toBe(
+          data.snapshot.pullRequest.description,
+        );
+        await press("\u000e");
         expect(cursorText(ui.renderer.root)).toBe("Greeting");
         expect(
           Boolean(ui.renderer.root.findDescendantById("comment-editor")),
@@ -167,7 +171,7 @@ for (const theme of Object.values(themes)) {
         await press("k", "k", "k", "k", "k", "k", "k");
 
         expect(cursorText(ui.renderer.root)).toBe("Greeting");
-        await press("n", "p");
+        await press("\u000e", "\u0010");
 
         expect(cursorText(ui.renderer.root)).toBe("Greeting");
       } finally {
@@ -193,7 +197,7 @@ test("wrapped Unicode Markdown keeps its logical line selected and scrolls incre
 
   try {
     const applyTheme = mountReview(ui.renderer, data);
-    await ui.mockInput.pressKeys(["n", "j"]);
+    await ui.mockInput.pressKeys(["\u000e", "j"]);
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
@@ -203,7 +207,7 @@ test("wrapped Unicode Markdown keeps its logical line selected and scrolls incre
     const selected = cursorText(ui.renderer.root);
     expect(selected).toContain("Wrapped 👩‍💻 bold words");
     expect(selected).not.toContain("Narrative");
-    expect(body.scrollTop).toBeLessThan(10);
+    expect(body.scrollTop).toBeGreaterThan(0);
     const wrappedRows = cursorHighlightRows(ui);
     expect(wrappedRows.length).toBeGreaterThan(2);
 
@@ -228,19 +232,17 @@ test("wrapped Unicode Markdown keeps its logical line selected and scrolls incre
     await ui.renderOnce();
 
     expect(cursorText(ui.renderer.root)).toBe("Narrative 25");
-    data.snapshot.sections[1].explanation = "Next section narrative\n".repeat(
-      50,
-    );
-    await ui.mockInput.pressKeys(["j", "n"]);
+    await ui.mockInput.pressKeys(["j", "\u000e"]);
     await ui.renderOnce();
 
     expect(cursorText(ui.renderer.root)).toBe("Farewell");
-    expect(body.scrollTop).toBe(0);
-    await ui.mockInput.pressKeys(["p"]);
+    const secondSectionOffset = body.scrollTop;
+    expect(secondSectionOffset).toBeGreaterThan(0);
+    await ui.mockInput.pressKeys(["\u0010"]);
     await ui.renderOnce();
 
     expect(cursorText(ui.renderer.root)).toBe("Greeting");
-    expect(body.scrollTop).toBe(0);
+    expect(body.scrollTop).toBeLessThan(secondSectionOffset);
   } finally {
     await sessionHighlights(ui.renderer).settled();
     await ui.dispose();
@@ -299,13 +301,13 @@ test("collapsing files leaves a narrative cursor in place and folded headers sta
       await ui.renderOnce();
       await ui.renderOnce();
     };
-    await press("n", "j", "z", "c");
+    await press("\u000e", "j", "z", "c");
 
     const body = ui.renderer.root.findDescendantById(
       "body",
     ) as ScrollBoxRenderable;
     expect(cursorText(ui.renderer.root)).toBe("Last narrative line");
-    expect(body.scrollTop).toBe(0);
+    expect(body.scrollTop).toBeGreaterThan(0);
     expect(Boolean(ui.renderer.root.findDescendantById("comment-editor"))).toBe(
       false,
     );
