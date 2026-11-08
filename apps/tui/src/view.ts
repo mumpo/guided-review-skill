@@ -118,16 +118,60 @@ export function mountReview(
   const help = new TextRenderable(renderer, {
     id: "help",
     content: "",
-    wrapMode: "none",
-    height: 3,
+    wrapMode: "word",
     flexShrink: 0,
   });
   workspace.add(sidebar);
   workspace.add(body);
   root.add(heading);
   root.add(workspace);
+  const keybindingsOverlay = new BoxRenderable(renderer, {
+    id: "keybindings-overlay",
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: "100%",
+    height: "100%",
+    zIndex: 10,
+    visible: false,
+    onMouseDown: (event) => event.stopPropagation(),
+  });
+  const keybindingsModal = new BoxRenderable(renderer, {
+    id: "keybindings-modal",
+    position: "absolute",
+    flexDirection: "column",
+    border: true,
+    borderStyle: "rounded",
+    title: " Keybindings ",
+    paddingLeft: 1,
+    paddingRight: 1,
+  });
+  const keybindingsPanel = new ScrollBoxRenderable(renderer, {
+    id: "keybindings-panel",
+    flexGrow: 1,
+    minHeight: 0,
+    scrollX: false,
+    scrollY: true,
+  });
+  const keybindingsText = new TextRenderable(renderer, {
+    id: "keybindings-text",
+    wrapMode: "word",
+    flexShrink: 0,
+  });
+  keybindingsPanel.add(keybindingsText);
+  const keybindingsHint = new TextRenderable(renderer, {
+    id: "keybindings-hint",
+    content: "↑/↓ or j/k scroll  pgup/pgdn page  esc close",
+    wrapMode: "word",
+    flexShrink: 0,
+  });
+  keybindingsModal.add(keybindingsPanel);
+  keybindingsModal.add(keybindingsHint);
+  keybindingsOverlay.add(keybindingsModal);
+  separator(root, "footer-separator", 0);
   root.add(help);
   renderer.root.add(root);
+  renderer.root.add(keybindingsOverlay);
 
   function separator(parent: BoxRenderable, id?: string, marginBottom = 1) {
     const node = new BoxRenderable(renderer, {
@@ -306,9 +350,136 @@ export function mountReview(
   }
 
   function updateHelp() {
-    const label = (action: keyof Keybindings) =>
-      actionKeys(bindings, action, "viewer").join("/") || "unbound";
-    help.content = `${label("next_section")}/${label("previous_section")}: sections | ${label("next_item")}/${label("previous_item")}: items | ${label("toggle_sidebar")}: sidebar | ${label("quit")}/${label("interrupt")}: quit\n${label("cursor_down")}/${label("cursor_up")}: cursor | ${label("switch_side")}: side | ${label("open_comment")}: comment | ${label("toggle_file")}: fold | ${label("cycle_diff_mode")}: diff ${diffMode}\n${label("scroll_up")}/${label("scroll_down")}: scroll | ${label("page_up")}/${label("page_down")}: page | ${label("half_page_up")}/${label("half_page_down")}: half page`;
+    const label = (
+      action: keyof Keybindings,
+      context: "viewer" | "editor" = "viewer",
+    ) =>
+      actionKeys(bindings, action, context)
+        .map((key) => key.replaceAll("ctrl+", "^"))
+        .join("/") || "unbound";
+    const descriptions: Record<keyof Keybindings, string> = {
+      cursor_down: "move down",
+      cursor_up: "move up",
+      next_section: "next section",
+      previous_section: "prev section",
+      next_item: "next item",
+      previous_item: "prev item",
+      toggle_help: "keybindings",
+      summary: "summary",
+      last_section: "last section",
+      scroll_down: "scroll down",
+      scroll_up: "scroll up",
+      page_down: "page down",
+      page_up: "page up",
+      half_page_down: "half page down",
+      half_page_up: "half page up",
+      switch_side: "switch diff side",
+      open_comment: "open line comment",
+      toggle_file: "fold/unfold file",
+      cycle_diff_mode: `cycle diff layout (${diffMode})`,
+      toggle_sidebar: "toggle sidebar",
+      quit: "quit",
+      interrupt: "interrupt/quit",
+      close_comment: "close comment editor",
+      publish_comment: "publish comment",
+    };
+    const chunk = (text: string, color: string) => ({
+      __isChunk: true as const,
+      text,
+      fg: RGBA.fromHex(color),
+    });
+    const footerActions = [
+      "cursor_down",
+      "cursor_up",
+      "next_section",
+      "previous_section",
+      "next_item",
+      "previous_item",
+      "toggle_help",
+    ] as const;
+    help.content = new StyledText(
+      footerActions.flatMap((action, index) => [
+        chunk(`${index ? "  " : ""}${label(action)}`, theme.text),
+        chunk(` ${descriptions[action]}`, theme.muted),
+      ]),
+    );
+
+    const groups: {
+      title: string;
+      actions: (keyof Keybindings)[];
+      editor?: boolean;
+    }[] = [
+      {
+        title: "Navigation",
+        actions: [
+          "cursor_down",
+          "cursor_up",
+          "next_section",
+          "previous_section",
+          "next_item",
+          "previous_item",
+          "summary",
+          "last_section",
+        ],
+      },
+      {
+        title: "Scrolling",
+        actions: [
+          "scroll_down",
+          "scroll_up",
+          "page_down",
+          "page_up",
+          "half_page_down",
+          "half_page_up",
+        ],
+      },
+      {
+        title: "Diff and comments",
+        actions: [
+          "switch_side",
+          "open_comment",
+          "toggle_file",
+          "cycle_diff_mode",
+        ],
+      },
+      {
+        title: "Application",
+        actions: ["toggle_sidebar", "toggle_help", "quit", "interrupt"],
+      },
+      {
+        title: "Comment editor",
+        actions: ["close_comment", "publish_comment", "interrupt"],
+        editor: true,
+      },
+    ];
+    const columnWidth = Math.max(
+      12,
+      ...groups.flatMap((group) =>
+        group.actions.map(
+          (action) =>
+            displayWidth(label(action, group.editor ? "editor" : "viewer")) + 2,
+        ),
+      ),
+    );
+    const narrow = Math.min(88, renderer.width - 4) - 4 < columnWidth + 24;
+    keybindingsText.content = new StyledText(
+      groups.flatMap((group, index) => [
+        chunk(
+          `${index ? "\n" : ""}${group.title}\n`,
+          theme.navigation.foreground,
+        ),
+        ...group.actions.flatMap((action) => {
+          const key = label(action, group.editor ? "editor" : "viewer");
+          return [
+            chunk(`  ${key}`, theme.text),
+            chunk(
+              `${narrow ? "\n    " : " ".repeat(columnWidth - displayWidth(key))}${descriptions[action]}\n`,
+              theme.muted,
+            ),
+          ];
+        }),
+      ]),
+    );
   }
 
   function paintSidebar(force = false) {
@@ -409,6 +580,20 @@ export function mountReview(
   }
 
   function updateGeometry() {
+    const modalWidth = Math.max(1, Math.min(88, renderer.width - 4));
+    const modalHeight = Math.max(1, Math.min(42, renderer.height - 4));
+    keybindingsModal.width = modalWidth;
+    keybindingsModal.height = modalHeight;
+    keybindingsModal.left = Math.max(
+      0,
+      Math.floor((renderer.width - modalWidth) / 2),
+    );
+    keybindingsModal.top = Math.max(
+      0,
+      Math.floor((renderer.height - modalHeight) / 2),
+    );
+    updateHelp();
+
     const release = anchorViewport();
     sidebar.visible = sidebarOverride ?? renderer.width >= 110;
     const width = Math.min(32, Math.max(1, Math.floor(renderer.width * 0.4)));
@@ -439,7 +624,15 @@ export function mountReview(
     heading.fg = theme.navigation.foreground;
     heading.bg = theme.navigation.background;
     help.fg = theme.muted;
-    help.bg = theme.surface;
+    help.bg = theme.background;
+    keybindingsModal.backgroundColor = theme.surface;
+    keybindingsModal.borderColor = theme.navigation.foreground;
+    keybindingsModal.titleColor = theme.navigation.foreground;
+    keybindingsPanel.backgroundColor = theme.surface;
+    keybindingsText.bg = theme.surface;
+    keybindingsHint.fg = theme.muted;
+    keybindingsHint.bg = theme.surface;
+    updateHelp();
     sidebar.borderColor = theme.border;
     for (const node of texts) {
       node.setCursorTheme(theme.name);
@@ -458,8 +651,9 @@ export function mountReview(
       part.explanation?.setTheme(theme);
       part.changes.setTheme(theme);
     }
-    for (const scroll of [body, sidebar]) {
-      scroll.backgroundColor = theme.background;
+    for (const scroll of [body, sidebar, keybindingsPanel]) {
+      scroll.backgroundColor =
+        scroll === keybindingsPanel ? theme.surface : theme.background;
       scroll.scrollbarOptions = {
         trackOptions: {
           foregroundColor: theme.scrollbar.foreground,
@@ -483,9 +677,30 @@ export function mountReview(
       return;
     }
     if (editor?.handleCommentKey(key)) return;
+    if (keybindingsOverlay.visible) {
+      if (action === "toggle_help" || key.name === "escape") {
+        keybindingsOverlay.visible = false;
+      } else if (action === "quit") {
+        renderer.destroy();
+      } else if (action === "scroll_down" || action === "cursor_down") {
+        keybindingsPanel.scrollBy(1);
+      } else if (action === "scroll_up" || action === "cursor_up") {
+        keybindingsPanel.scrollBy(-1);
+      } else if (action === "page_down" || action === "page_up") {
+        keybindingsPanel.scrollBy(
+          (action === "page_down" ? 1 : -1) *
+            Math.max(1, keybindingsPanel.viewport.height - 1),
+        );
+      }
+      key.preventDefault();
+      return;
+    }
     if (!action) return;
     const part = parts[active];
     switch (action) {
+      case "toggle_help":
+        keybindingsOverlay.visible = true;
+        break;
       case "quit":
         renderer.destroy();
         break;

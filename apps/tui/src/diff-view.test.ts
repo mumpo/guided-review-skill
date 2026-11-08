@@ -1,7 +1,12 @@
 import { cursorBackground } from "./cursor-highlight";
 import { sessionHighlights } from "./highlight-service";
 import { expect, test } from "bun:test";
-import { RGBA, TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
+import {
+  RGBA,
+  TextAttributes,
+  type TextRenderable,
+  type ScrollBoxRenderable,
+} from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
 import fixture from "../../../packages/core/fixtures/valid.json";
 import { analyzeDiffs, type ReviewSnapshot } from "../../../packages/core/src";
@@ -199,7 +204,13 @@ test("automatic layouts vary by selected file, resize at the threshold, and can 
     await sessionHighlights(ui.renderer).settled();
     await ui.renderOnce();
 
-    expect(ui.captureCharFrame()).toContain("d: diff inline");
+    expect(
+      (
+        ui.renderer.root.findDescendantById(
+          "keybindings-text",
+        ) as TextRenderable
+      ).plainText,
+    ).toContain("cycle diff layout (inline)");
     expect(ui.captureCharFrame()).toContain("src/greeting.ts");
 
     await ui.mockInput.pressKeys(["d"]);
@@ -346,7 +357,13 @@ test("markers, metadata, and empty sections retain readable themed messages in b
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
-        expect(ui.captureCharFrame()).toContain(`d: diff ${mode}`);
+        expect(
+          (
+            ui.renderer.root.findDescendantById(
+              "keybindings-text",
+            ) as TextRenderable
+          ).plainText,
+        ).toContain(`cycle diff layout (${mode})`);
 
         for (const text of [
           "Binary file:",

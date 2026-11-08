@@ -111,7 +111,9 @@ test("custom keys, conflict winner, help, sidebar widths, and removed interrupts
     await ui.mockInput.pressKeys(["f"]);
     await ui.renderOnce();
     expect(heading.plainText).toContain("Section 1/3");
-    expect(ui.captureCharFrame()).toContain("unbound/ctrl+p: sections");
+    expect(ui.captureCharFrame()).toContain(
+      "unbound next section  ^p prev section",
+    );
     ui.resize(60, 30);
     await ui.renderOnce();
     await ui.mockInput.pressKeys(["x"]);
@@ -333,6 +335,113 @@ for (const mode of ["inline", "side-by-side"] as const) {
           selectedIcon?.fg.equals(RGBA.fromHex(theme.fileStatus.modified)),
         ).toBe(true);
       }
+    } finally {
+      await sessionHighlights(ui.renderer).settled();
+      await ui.dispose();
+    }
+  });
+}
+
+for (const mode of ["inline", "side-by-side"] as const) {
+  test(`${mode}: compact footer and scrollable keybindings follow themes and resizing`, async () => {
+    const ui = await createTestRenderer({ width: 160, height: 30 });
+    try {
+      const applyTheme = mountReview(ui.renderer, data(), undefined, mode);
+      await sessionHighlights(ui.renderer).settled();
+      await ui.renderOnce();
+      const footer = ui.renderer.root.findDescendantById(
+        "help",
+      ) as TextRenderable;
+      const panel = ui.renderer.root.findDescendantById(
+        "keybindings-panel",
+      ) as ScrollBoxRenderable;
+      const overlay = ui.renderer.root.findDescendantById(
+        "keybindings-overlay",
+      ) as BoxRenderable;
+      const modal = ui.renderer.root.findDescendantById(
+        "keybindings-modal",
+      ) as BoxRenderable;
+      const separator = ui.renderer.root.findDescendantById(
+        "footer-separator",
+      ) as BoxRenderable;
+      const workspace = ui.renderer.root.findDescendantById(
+        "workspace",
+      ) as BoxRenderable;
+      const heading = ui.renderer.root.findDescendantById(
+        "heading",
+      ) as TextRenderable;
+      const expected =
+        "j move down  k move up  ^n next section  ^p prev section  tab next item  shift+tab prev item  ? keybindings";
+
+      expect(footer.plainText).toBe(expected);
+      expect(footer.height).toBe(1);
+      expect(separator.y).toBe(footer.y - 1);
+      for (const theme of Object.values(themes)) {
+        applyTheme(theme);
+        await ui.renderOnce();
+        const footerSpans = ui.captureSpans().lines[footer.y].spans;
+        expect(
+          footerSpans
+            .find((span) => span.text.includes("j"))
+            ?.fg.equals(RGBA.fromHex(theme.text)),
+        ).toBe(true);
+        expect(
+          footerSpans
+            .find((span) => span.text.includes("move down"))
+            ?.fg.equals(RGBA.fromHex(theme.muted)),
+        ).toBe(true);
+        expect(separator.borderColor.equals(RGBA.fromHex(theme.border))).toBe(
+          true,
+        );
+        const body = ui.renderer.root.findDescendantById(
+          "body",
+        ) as ScrollBoxRenderable;
+        const scrollTop = body.scrollTop;
+        await ui.mockInput.pressKeys(["?"]);
+        await ui.renderOnce();
+        expect(overlay.visible).toBe(true);
+        expect(workspace.visible).toBe(true);
+        expect(ui.captureCharFrame()).toContain("Keybindings");
+        expect(ui.captureCharFrame()).toContain("Diff and comments");
+        expect(modal.width).toBeLessThan(ui.renderer.width);
+        expect(modal.height).toBeLessThan(ui.renderer.height);
+        expect(modal.x).toBe(Math.floor((ui.renderer.width - modal.width) / 2));
+        expect(modal.y).toBe(
+          Math.floor((ui.renderer.height - modal.height) / 2),
+        );
+        expect(
+          modal.borderColor.equals(RGBA.fromHex(theme.navigation.foreground)),
+        ).toBe(true);
+        expect(footer.fg?.equals(RGBA.fromHex(theme.muted))).toBe(true);
+        await ui.mockInput.pressKeys(["\u000e"]);
+        await ui.renderOnce();
+        expect(heading.plainText).toContain("Summary");
+        const nextSection = ui.renderer.root.findDescendantById(
+          "navigation-1",
+        ) as TextRenderable;
+        await ui.mockMouse.click(nextSection.x + 1, nextSection.y);
+        await ui.renderOnce();
+        expect(heading.plainText).toContain("Summary");
+
+        ui.resize(60, 14);
+        await ui.renderOnce();
+        expect(footer.height).toBeGreaterThan(1);
+        expect(footer.plainText).toBe(expected);
+        await ui.mockInput.pressKeys(["\u001b[6~"]);
+        await ui.renderOnce();
+        expect(panel.scrollTop).toBeGreaterThan(0);
+        ui.mockInput.pressEscape();
+        await Bun.sleep(50);
+        await ui.renderOnce();
+        expect(overlay.visible).toBe(false);
+        expect(workspace.visible).toBe(true);
+        expect(body.scrollTop).toBe(scrollTop);
+        ui.resize(160, 30);
+        await ui.renderOnce();
+      }
+      await ui.mockInput.pressKeys(["?", "?"]);
+      await ui.renderOnce();
+      expect(overlay.visible).toBe(false);
     } finally {
       await sessionHighlights(ui.renderer).settled();
       await ui.dispose();

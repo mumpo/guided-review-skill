@@ -187,6 +187,8 @@ The left sidebar lists Summary, bulleted sections separated by horizontal lines,
 | `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
+The footer shows the main navigation keys. Press `?` for the full keybinding list in a centered modal, scroll it with the arrow or page keys, and press `?` or `Esc` to return.
+
 All shortcuts above are defaults. Customize them in your existing `config.toml` using `[tui.keybindings]`; [config.example.toml](config.example.toml) lists every action and its default bindings, including editor close/publish and global interrupt. No configuration file is created or rewritten automatically.
 
 ```toml
