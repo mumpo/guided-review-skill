@@ -322,11 +322,12 @@ export function mountReview(
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${active === 0 ? "Summary" : `Section ${active}/${snapshot.sections.length}: ${parts[active].title}`}\n`;
     for (const [i, entry] of entries.entries()) {
       const section = entry.part > 0 && !entry.file;
-      const foreground = section
-        ? theme.muted
-        : i === index
+      const foreground =
+        i === index
           ? theme.navigation.foreground
-          : theme.text;
+          : section
+            ? theme.muted
+            : theme.text;
       entry.row.fg = foreground;
       entry.row.bg = section
         ? i === index

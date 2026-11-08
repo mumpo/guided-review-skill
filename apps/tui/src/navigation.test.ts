@@ -277,7 +277,16 @@ for (const mode of ["inline", "side-by-side"] as const) {
         }
         await ui.mockInput.pressKeys(["\t"]);
         await ui.renderOnce();
-        expect(section.fg?.equals(RGBA.fromHex(theme.muted))).toBe(true);
+        expect(
+          section.fg?.equals(RGBA.fromHex(theme.navigation.foreground)),
+        ).toBe(true);
+        const selectedSpans = ui.captureSpans().lines[section.y].spans;
+        for (const text of ["\uf51e", "Greeting"]) {
+          const span = selectedSpans.find((span) => span.text.includes(text));
+          expect(
+            span?.fg.equals(RGBA.fromHex(theme.navigation.foreground)),
+          ).toBe(true);
+        }
         expect(
           section.bg?.equals(
             RGBA.fromHex(cursorBackground(theme.surface, theme.name)),
