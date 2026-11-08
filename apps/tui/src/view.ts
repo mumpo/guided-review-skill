@@ -1,5 +1,7 @@
 import {
   BoxRenderable,
+  RGBA,
+  StyledText,
   type CliRenderer,
   type KeyEvent,
   type PasteEvent,
@@ -18,6 +20,7 @@ import { type Theme, themes } from "./theme";
 import { PullRequestHeader } from "./pr-header";
 import { githubCommentPublisher, type PublishComment } from "./comments";
 import { CursorText } from "./cursor-text";
+import { cursorBackground } from "./cursor-highlight";
 import { PageCursor } from "./page-cursor";
 import {
   keyAction,
@@ -41,6 +44,8 @@ interface NavigationEntry {
   file?: string;
   label: string;
   icon: string;
+  status?: keyof Theme["fileStatus"];
+  display: string;
   row: TextRenderable;
 }
 
@@ -124,14 +129,14 @@ export function mountReview(
   root.add(help);
   renderer.root.add(root);
 
-  function separator(parent: BoxRenderable, id?: string) {
+  function separator(parent: BoxRenderable, id?: string, marginBottom = 1) {
     const node = new BoxRenderable(renderer, {
       id,
       width: "100%",
       height: 1,
       flexShrink: 0,
       border: ["top"],
-      marginBottom: 1,
+      marginBottom,
     });
     parent.add(node);
     separators.push(node);
@@ -151,7 +156,13 @@ export function mountReview(
     return node;
   }
 
-  function addEntry(part: number, label: string, icon = "", file?: string) {
+  function addEntry(
+    part: number,
+    label: string,
+    icon = "",
+    file?: string,
+    status?: keyof Theme["fileStatus"],
+  ) {
     const index = entries.length;
     const row = new TextRenderable(renderer, {
       id: `navigation-${index}`,
@@ -165,14 +176,14 @@ export function mountReview(
       },
     });
     sidebar.add(row);
-    entries.push({ part, file, label, icon, row });
+    entries.push({ part, file, label, icon, status, display: label, row });
   }
 
   const icons = {
-    added: "\uf457",
-    modified: "\uf459",
-    renamed: "\uf45a",
-    deleted: "\uf458",
+    added: "\uf4d0",
+    modified: "\uf4d2",
+    renamed: "\uf4d5",
+    deleted: "\uf4d6",
   };
   const statusById = new Map(
     snapshot.files.map((file) => [file.id, file.status]),
@@ -278,13 +289,19 @@ export function mountReview(
       cursor,
       target,
     });
-    addEntry(index, index === 0 ? "Summary" : `${index}. ${section.title}`);
+    if (index > 0) separator(sidebar, `sidebar-separator-${index}`, 0);
+    addEntry(
+      index,
+      index === 0 ? "Summary" : section.title,
+      index === 0 ? "" : "\uf51e",
+    );
     for (const file of files)
       addEntry(
         index,
         file.newPath ?? file.oldPath ?? file.id,
         icons[statusById.get(file.id) ?? "modified"],
         file.id,
+        statusById.get(file.id) ?? "modified",
       );
   }
 
@@ -304,9 +321,33 @@ export function mountReview(
     selectedEntry = index;
     heading.content = `${pr.owner}/${pr.repository} #${pr.number} · ${active === 0 ? "Summary" : `Section ${active}/${snapshot.sections.length}: ${parts[active].title}`}\n`;
     for (const [i, entry] of entries.entries()) {
-      entry.row.fg = i === index ? theme.navigation.foreground : theme.text;
-      entry.row.bg =
-        i === index ? theme.navigation.background : theme.background;
+      const section = entry.part > 0 && !entry.file;
+      const foreground = section
+        ? theme.muted
+        : i === index
+          ? theme.navigation.foreground
+          : theme.text;
+      entry.row.fg = foreground;
+      entry.row.bg = section
+        ? i === index
+          ? cursorBackground(theme.surface, theme.name)
+          : theme.surface
+        : i === index
+          ? theme.navigation.background
+          : theme.background;
+      entry.row.content = entry.icon
+        ? new StyledText([
+            { __isChunk: true, text: entry.file ? "  " : "" },
+            {
+              __isChunk: true,
+              text: entry.icon,
+              fg: RGBA.fromHex(
+                entry.status ? theme.fileStatus[entry.status] : foreground,
+              ),
+            },
+            { __isChunk: true, text: ` ${entry.display}` },
+          ])
+        : entry.display;
     }
     if ((changed || force) && sidebar.visible) {
       const row = entries[index]?.row;
@@ -372,9 +413,11 @@ export function mountReview(
     const width = Math.min(32, Math.max(1, Math.floor(renderer.width * 0.4)));
     sidebar.width = width;
     for (const entry of entries) {
-      const prefix = entry.file ? `  ${entry.icon} ` : "";
+      const prefix = entry.icon
+        ? `${entry.file ? "  " : ""}${entry.icon} `
+        : "";
       const max = Math.max(1, width - 2 - displayWidth(prefix));
-      entry.row.content = prefix + truncate(entry.label, max, !!entry.file);
+      entry.display = truncate(entry.label, max, !!entry.file);
     }
     for (const part of parts) {
       part.changes.resizeLayout(
@@ -396,7 +439,7 @@ export function mountReview(
     heading.bg = theme.navigation.background;
     help.fg = theme.muted;
     help.bg = theme.surface;
-    sidebar.borderColor = theme.muted;
+    sidebar.borderColor = theme.border;
     for (const node of texts) {
       node.setCursorTheme(theme.name);
       node.fg = theme.markdown.text;
@@ -405,7 +448,7 @@ export function mountReview(
     for (const node of markdowns) node.setTheme(theme);
     prHeader.setTheme(theme);
     for (const node of separators) {
-      node.borderColor = theme.muted;
+      node.borderColor = theme.border;
       node.backgroundColor = theme.background;
     }
     for (const part of parts) {

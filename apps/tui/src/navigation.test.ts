@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   RGBA,
+  type BoxRenderable,
   type ScrollBoxRenderable,
   type TextRenderable,
 } from "@opentui/core";
@@ -11,6 +12,7 @@ import { resolveKeybindings } from "../../../packages/preferences/src";
 import { mountReview } from "./view";
 import { sessionHighlights } from "./highlight-service";
 import { themes } from "./theme";
+import { cursorBackground } from "./cursor-highlight";
 
 function data() {
   const snapshot = structuredClone(fixture) as ReviewSnapshot;
@@ -149,15 +151,17 @@ test("one cursor crosses section boundaries in both directions and tracks the si
     expect(heading.plainText).toContain("Section 2/2");
     expect(
       second.bg?.equals(
-        RGBA.fromHex(themes["github-dark"].navigation.background),
+        RGBA.fromHex(
+          cursorBackground(themes["github-dark"].surface, "github-dark"),
+        ),
       ),
     ).toBe(true);
     await ui.mockInput.pressKeys(["k"]);
     await ui.renderOnce();
     expect(heading.plainText).toContain("Section 1/2");
-    expect(
-      second.bg?.equals(RGBA.fromHex(themes["github-dark"].background)),
-    ).toBe(true);
+    expect(second.bg?.equals(RGBA.fromHex(themes["github-dark"].surface))).toBe(
+      true,
+    );
     await ui.mockInput.pressKeys(["\t"]);
     await ui.renderOnce();
     expect(heading.plainText).toContain("Section 2/2");
@@ -213,3 +217,116 @@ test("sidebar scrolls to selected destinations and truncates Unicode paths", asy
     await ui.dispose();
   }
 });
+
+for (const mode of ["inline", "side-by-side"] as const) {
+  test(`${mode}: sidebar bullets, separators, file icons, and borders follow both themes`, async () => {
+    const review = data();
+    review.snapshot.files.push({
+      ...review.snapshot.files[0],
+      id: "deleted",
+      status: "deleted",
+      oldPath: "deleted.go",
+      newPath: null,
+      diff: { kind: "unavailable", reason: "Deleted file" },
+    });
+    review.snapshot.sections[0].references = review.snapshot.files.map(
+      (file) => ({ kind: "file", fileId: file.id }),
+    );
+    review.analysis = analyzeDiffs(review.snapshot);
+    const ui = await createTestRenderer({ width: 140, height: 40 });
+    try {
+      const applyTheme = mountReview(
+        ui.renderer,
+        review,
+        themes["github-light"],
+        mode,
+      );
+      await sessionHighlights(ui.renderer).settled();
+      await ui.renderOnce();
+      const sidebar = ui.renderer.root.findDescendantById(
+        "sidebar",
+      ) as ScrollBoxRenderable;
+      const section = ui.renderer.root.findDescendantById(
+        "navigation-1",
+      ) as TextRenderable;
+      expect(section.plainText).toBe("\uf51e Greeting");
+      expect(section.plainText).not.toContain("1.");
+      const icons = [
+        ["\uf4d0", "#1a7f37", "#3fb950"],
+        ["\uf4d2", "#59636e", "#9198a1"],
+        ["\uf4d6", "#d1242f", "#f85149"],
+        ["\uf4d5", "#9a6700", "#d29922"],
+      ];
+      for (const theme of Object.values(themes)) {
+        applyTheme(theme);
+        await ui.renderOnce();
+        await ui.mockInput.pressKeys(["s"]);
+        await ui.renderOnce();
+        expect(section.fg?.equals(RGBA.fromHex(theme.muted))).toBe(true);
+        expect(section.bg?.equals(RGBA.fromHex(theme.surface))).toBe(true);
+        const sectionSpans = ui.captureSpans().lines[section.y].spans;
+        const bullet = sectionSpans.find((span) =>
+          span.text.includes("\uf51e"),
+        );
+        const label = sectionSpans.find((span) =>
+          span.text.includes("Greeting"),
+        );
+        for (const span of [bullet, label]) {
+          expect(span?.fg.equals(RGBA.fromHex(theme.muted))).toBe(true);
+          expect(span?.bg.equals(RGBA.fromHex(theme.surface))).toBe(true);
+        }
+        await ui.mockInput.pressKeys(["\t"]);
+        await ui.renderOnce();
+        expect(section.fg?.equals(RGBA.fromHex(theme.muted))).toBe(true);
+        expect(
+          section.bg?.equals(
+            RGBA.fromHex(cursorBackground(theme.surface, theme.name)),
+          ),
+        ).toBe(true);
+        const border = theme.name === "github-light" ? "#d1d9e0" : "#3d444d";
+        expect(sidebar.borderColor.equals(RGBA.fromHex(border))).toBe(true);
+        for (const id of [
+          "description-separator",
+          "section-separator-2",
+          "sidebar-separator-1",
+          "sidebar-separator-2",
+          "sidebar-separator-3",
+          "file-header-greeting",
+        ]) {
+          const node = ui.renderer.root.findDescendantById(id) as BoxRenderable;
+          expect(node.borderColor.equals(RGBA.fromHex(border))).toBe(true);
+        }
+        const separator = ui.renderer.root.findDescendantById(
+          "sidebar-separator-2",
+        ) as BoxRenderable;
+        expect(separator.y).toBeGreaterThan(section.y);
+        expect(separator.height).toBe(1);
+        const spans = ui.captureSpans().lines.flatMap((line) => line.spans);
+        for (const [icon, light, dark] of icons) {
+          const span = spans.find((span) => span.text.includes(icon));
+          expect(
+            span?.fg.equals(
+              RGBA.fromHex(theme.name === "github-light" ? light : dark),
+            ),
+          ).toBe(true);
+        }
+        await ui.mockInput.pressKeys(["s", "\t", "\t"]);
+        await ui.renderOnce();
+        const selectedIcon = ui
+          .captureSpans()
+          .lines.flatMap((line) => line.spans)
+          .find(
+            (span) =>
+              span.text.includes("\uf4d2") &&
+              span.bg.equals(RGBA.fromHex(theme.navigation.background)),
+          );
+        expect(
+          selectedIcon?.fg.equals(RGBA.fromHex(theme.fileStatus.modified)),
+        ).toBe(true);
+      }
+    } finally {
+      await sessionHighlights(ui.renderer).settled();
+      await ui.dispose();
+    }
+  });
+}

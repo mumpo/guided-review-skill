@@ -831,7 +831,7 @@ export class DiffView extends BoxRenderable {
         flexShrink: 0,
         flexDirection: "column",
         border: true,
-        borderColor: this.palette.navigation.foreground,
+        borderColor: this.palette.border,
         backgroundColor: this.palette.surface,
         paddingLeft: 1,
         paddingRight: 1,
@@ -919,7 +919,7 @@ export class DiffView extends BoxRenderable {
           ? cursorBackground(theme.surface, theme.name)
           : theme.surface;
       box.backgroundColor = background;
-      box.borderColor = theme.muted;
+      box.borderColor = theme.border;
       for (const node of [chevron, path, added, deleted]) node.bg = background;
 
       chevron.fg = theme.muted;
@@ -1029,7 +1029,7 @@ export class DiffView extends BoxRenderable {
 
     // Comment boxes are rebuilt only for layout/state changes; recolor in place.
     for (const box of this.commentBoxes) {
-      box.borderColor = theme.navigation.foreground;
+      box.borderColor = theme.border;
       box.backgroundColor = theme.surface;
     }
     for (const node of this.commentText) {

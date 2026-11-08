@@ -50,7 +50,7 @@ test("summary separates metadata from the unlabeled description in both themes a
         expect(frame.indexOf("─")).toBeLessThan(
           frame.indexOf("Description starts here"),
         );
-        expect(separator.borderColor.equals(RGBA.fromHex(theme.muted))).toBe(
+        expect(separator.borderColor.equals(RGBA.fromHex(theme.border))).toBe(
           true,
         );
 
@@ -71,7 +71,7 @@ test("summary separates metadata from the unlabeled description in both themes a
           ui.renderer.root.findDescendantById("description-separator"),
         ).toBe(separator);
         expect(
-          separator.borderColor.equals(RGBA.fromHex(nextTheme.muted)),
+          separator.borderColor.equals(RGBA.fromHex(nextTheme.border)),
         ).toBe(true);
 
         ui.resize(45, 45);
