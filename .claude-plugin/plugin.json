@@ -1,0 +1,9 @@
+{
+  "name": "guided-review",
+  "version": "0.1.0",
+  "description": "Generate an ordered walkthrough of a GitHub pull request and browse its captured diff offline in your terminal.",
+  "author": { "name": "Sergi Férriz" },
+  "homepage": "https://github.com/mumpo/guided-review-skill",
+  "repository": "https://github.com/mumpo/guided-review-skill",
+  "license": "MIT"
+}

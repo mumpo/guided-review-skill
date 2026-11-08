@@ -16,6 +16,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "typecheck": "tsc --noEmit",
+    "package:plugin": "bun run scripts/package-plugin.ts",
+    "test:plugin": "bun run scripts/smoke-plugin.ts",
     "open:review": "bun run apps/launcher/src/index.ts"
   },
   "devDependencies": {
