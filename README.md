@@ -173,6 +173,10 @@ The left sidebar lists Summary, bulleted sections separated by horizontal lines,
 | --- | --- |
 | `Ctrl+n` / `Ctrl+p` | Jump to the next/previous section title, skipping files; Summary precedes the first section. |
 | `Tab` / `Shift+Tab` | Jump to the next/previous sidebar destination, including file headers. |
+| `/` | Open an empty search bar with live document highlighting. |
+| `Enter` (search) | Commit the query and focus a result. |
+| `n` / `N` | Focus the next/previous search occurrence, wrapping at either end. |
+| `Esc` (search) | Clear search highlights and close the search bar. |
 | `b` | Toggle the sidebar for this session. |
 | `s`, `Home` | Return to summary. |
 | `End` | Jump to the last section title. |
@@ -187,9 +191,13 @@ The left sidebar lists Summary, bulleted sections separated by horizontal lines,
 | `d` | Cycle diff preference: auto → inline → side-by-side → auto (session only). |
 | `q`, `Ctrl+C` | Quit and restore the terminal. |
 
+The workspace starts at the top of the terminal; PR metadata remains in the summary rather than a persistent header. Press `/` to show a search bar with a horizontal separator beneath it. Search highlights literal substrings as you type, without moving the document cursor. Matching is case sensitive by default; put `\c` anywhere in the query to ignore case (for example, `\cGreeting`). Other punctuation is literal, with no regex syntax. Enter commits the query and focuses the first occurrence on or after the current cursor line, wrapping if necessary. The bar stays visible with the current/total occurrence count, or “No matches.” Use `n`/`N` to move forward/backward through occurrences; each jump selects the result's logical cursor line and reveals the matching wrapped portion. Ordinary cursor movement makes the next search jump resume from that position.
+
+Search covers document text: captured PR metadata, description, section titles and explanations, file paths and counts, notices, selected source, and displayed comments. Folded files remain searchable and expand when a result is focused; they stay expanded after clearing search. Duplicated side-by-side context counts once. Search excludes sidebar/help duplicates, editable drafts, hidden artifact fields, unselected source, generated diff gutters/list markers, and diagram images; displayed Mermaid source fallback remains searchable. Escape clears the query, highlights, bar, and separator while retaining the document cursor. In a comment editor, Escape closes the editor first and retains its draft and search; another Escape clears search. Pressing `/` during a committed search starts a fresh, empty query. Submitting an empty query (or only `\c`) closes search.
+
 The footer shows the main navigation keys. Press `?` for the full keybinding list in a centered modal, scroll it with the arrow or page keys, and press `?` or `Esc` to return.
 
-All shortcuts above are defaults. Customize them in your existing `config.toml` using `[tui.keybindings]`; [config.example.toml](config.example.toml) lists every action and its default bindings, including editor close/publish and global interrupt. No configuration file is created or rewritten automatically.
+All shortcuts above are defaults. Customize them in your existing `config.toml` using `[tui.keybindings]`; [config.example.toml](config.example.toml) lists every action and its default bindings, including search, editor close/publish, and global interrupt. No configuration file is created or rewritten automatically.
 
 ```toml
 [tui.keybindings]
@@ -200,7 +208,7 @@ cursor_down = ["x", "j"]
 toggle_file = ["x"] # Last assignment wins: x folds files; j still moves down.
 ```
 
-Each array replaces that action’s defaults; omitted actions keep their defaults and `[]` disables an action. Defaults are resolved first, followed by explicit assignments in configuration order. When normalized bindings collide, only the last assignment remains active for that key in the same context; the earlier action retains its other keys. Conflicts are resolved silently, and help shows the effective bindings. The old `n`/`p`, `h`/`l`, and left/right section shortcuts have no default action, but can be assigned here.
+Each array replaces that action’s defaults; omitted actions keep their defaults and `[]` disables an action. Defaults are resolved first, followed by explicit assignments in configuration order. When normalized bindings collide, only the last assignment remains active for that key in the same context; the earlier action retains its other keys. Conflicts are resolved silently, and help shows the effective bindings. The old `p`, `h`/`l`, and left/right section shortcuts have no default action, but can be assigned here; `n` now advances search results.
 
 Bindings describe one keypress, such as `j`, `tab`, `shift+tab`, or `ctrl+n`. Names and modifiers are case-insensitive; modifier order is ignored and `option` aliases `alt`. Supported modifiers are `ctrl`, `shift`, `alt`, and `meta`; named keys include `space`, `escape`, `return`, arrows, `home`, `end`, `pageup`, `pagedown`, `backspace`, `delete`, `insert`, and `f1`–`f12`. Letters and digits are supported; key sequences are not. Terminal protocols may not distinguish some combinations (for example, Ctrl+i from Tab), and terminals may intercept others.
 

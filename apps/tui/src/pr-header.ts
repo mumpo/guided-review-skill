@@ -5,10 +5,11 @@ import {
   StyledText,
   TextAttributes,
   type TextChunk,
-  TextRenderable,
 } from "@opentui/core";
 import type { ReviewSnapshot } from "../../../packages/core/src";
 import type { Theme } from "./theme";
+
+import { CursorText } from "./cursor-text";
 
 type PullRequest = ReviewSnapshot["pullRequest"];
 
@@ -44,8 +45,8 @@ function prLink(value: string): string | undefined {
 
 /** Captured PR metadata, styled without interpreting any field as Markdown. */
 export class PullRequestHeader extends BoxRenderable {
-  private readonly titleNode: TextRenderable;
-  private readonly details: TextRenderable;
+  private readonly titleNode: CursorText;
+  private readonly details: CursorText;
 
   constructor(
     renderer: CliRenderer,
@@ -60,13 +61,13 @@ export class PullRequestHeader extends BoxRenderable {
       marginBottom: 1,
     });
 
-    this.titleNode = new TextRenderable(renderer, {
+    this.titleNode = new CursorText(renderer, {
       id: "pr-title",
       width: "100%",
       wrapMode: "word",
       flexShrink: 0,
     });
-    this.details = new TextRenderable(renderer, {
+    this.details = new CursorText(renderer, {
       id: "pr-details",
       width: "100%",
       wrapMode: "word",
@@ -95,6 +96,8 @@ export class PullRequestHeader extends BoxRenderable {
     const url = prLink(pr.url);
 
     this.backgroundColor = theme.background;
+    this.titleNode.setCursorTheme(theme.name);
+    this.details.setCursorTheme(theme.name);
     this.titleNode.bg = theme.background;
     this.details.bg = theme.background;
     this.titleNode.content = new StyledText([

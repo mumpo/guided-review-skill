@@ -43,6 +43,18 @@ export class PageCursor {
     return this.inDiff ? this.changes.cursorFile : undefined;
   }
 
+  focusText(node: CursorText, line: number) {
+    this.epoch++;
+    this.selectText({ node, line });
+  }
+
+  focusDiff(focus: () => void) {
+    this.epoch++;
+    this.clearText();
+    this.inDiff = true;
+    focus();
+  }
+
   focusFile(id: string) {
     this.clearText();
     this.inDiff = this.changes.focusFile(id);

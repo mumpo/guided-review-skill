@@ -64,7 +64,7 @@ test("summary starts worker warm-up before navigation, without waiting for synta
     await ui.renderOnce();
 
     expect(preload).toHaveBeenCalledWith(reviewSyntaxSamples(data));
-    expect(ui.captureCharFrame()).toContain("Summary");
+    expect(ui.captureCharFrame()).toContain("Update the greeting");
     expect(ui.captureCharFrame()).not.toContain("+hello world");
     // Completion before any navigation proves warming is triggered at startup.
     await sessionHighlights(ui.renderer).settled();

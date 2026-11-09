@@ -271,7 +271,11 @@ test("mode and width changes anchor scrolled diffs while theme changes preserve 
       "body",
     ) as ScrollBoxRenderable;
     const visible = () =>
-      ui.captureCharFrame().split("\n").slice(2, -3).join("\n");
+      ui
+        .captureCharFrame()
+        .split("\n")
+        .slice(body.viewport.y, body.viewport.y + body.viewport.height)
+        .join("\n");
 
     const before = visible().match(/(?:old|new)_(\d+)/)?.[1];
 
@@ -714,7 +718,14 @@ test("file headers replace Git metadata with counts and collapse independently a
         const frame = ui.captureCharFrame();
         const lines = frame.split("\n");
         const y = lines.findIndex((line) => line.includes("src/greeting.ts"));
-        const x = lines[y].indexOf("⌄");
+        const clickHeader = async () => {
+          const header = ui.renderer.root.findDescendantById(
+            "file-header-greeting",
+          );
+          const button = header?.getChildren()[0];
+          expect(button).toBeDefined();
+          if (button) await ui.mockMouse.click(button.x, button.y);
+        };
         const header = lines[y];
 
         expect(lines[y - 1]).toContain("┌─");
@@ -746,7 +757,7 @@ test("file headers replace Git metadata with counts and collapse independently a
           expect((span?.attributes ?? 0) & TextAttributes.BOLD).toBeTruthy();
         }
 
-        await ui.mockMouse.click(x, y);
+        await clickHeader();
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
@@ -754,14 +765,14 @@ test("file headers replace Git metadata with counts and collapse independently a
         expect(ui.captureCharFrame()).toContain("+New guide");
         expect(ui.captureCharFrame()).toContain("›");
 
-        await ui.mockMouse.click(x, y);
+        await clickHeader();
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
         expect(ui.captureCharFrame()).toContain("+hello world");
         expect(ui.captureCharFrame()).not.toContain("›");
 
-        await ui.mockMouse.click(x, y);
+        await clickHeader();
         await sessionHighlights(ui.renderer).settled();
         await ui.renderOnce();
 
