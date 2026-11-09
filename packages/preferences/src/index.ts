@@ -29,6 +29,7 @@ export interface Preferences {
   lightTheme: ThemeName;
   darkTheme: ThemeName;
   diffMode: DiffMode;
+  commentsUnfolded: boolean;
   launch: LaunchTarget;
   pane: { direction: "right" | "down"; size: number };
   popup: { width: number; height: number };
@@ -155,6 +156,7 @@ export async function loadPreferences(
         "light_theme",
         "dark_theme",
         "diff_mode",
+        "comments_unfolded",
         "launch",
         "pane",
         "popup",
@@ -162,6 +164,12 @@ export async function loadPreferences(
       ],
       "tui",
     );
+    if (
+      tui.comments_unfolded !== undefined &&
+      typeof tui.comments_unfolded !== "boolean"
+    )
+      throw new Error("tui.comments_unfolded: expected a boolean");
+
     const pane = table(tui.pane, ["direction", "size"], "tui.pane");
     const popup = table(tui.popup, ["width", "height"], "tui.popup");
     const custom = table(tui.custom, ["command"], "tui.custom");
@@ -203,6 +211,7 @@ export async function loadPreferences(
       autoOpen: (root.auto_open as boolean | undefined) ?? true,
       theme: cli.theme ?? environment ?? configuredTheme,
       diffMode: cli.diffMode ?? configuredDiff,
+      commentsUnfolded: (tui.comments_unfolded as boolean | undefined) ?? false,
       lightTheme: choice(
         tui.light_theme ?? "github-light",
         ["github-light", "github-dark"],

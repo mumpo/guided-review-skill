@@ -7,6 +7,7 @@ theme = "auto"
 light_theme = "github-light"
 dark_theme = "github-dark"
 diff_mode = "auto"
+comments_unfolded = false
 # auto, terminal-window, tmux-window, tmux-pane, tmux-popup,
 # herdr-tab, herdr-pane, custom
 launch = "auto"
@@ -27,6 +28,7 @@ command = ["kitty", "--title", "Guided Review", "{viewer}"]
 # Omitted actions keep their defaults. An array replaces an action's bindings;
 # [] disables it. Later assignments win conflicts (defaults are applied first).
 # Viewer, search-input, and comment-editor bindings have separate contexts;
+# Reaction-picker bindings have their own context.
 # clear_search applies to viewer/search input, and interrupt is global.
 [tui.keybindings]
 next_section = ["ctrl+n"]
@@ -45,6 +47,8 @@ half_page_down = ["ctrl+d"]
 half_page_up = ["ctrl+u"]
 switch_side = ["space"]
 open_comment = ["c"]
+open_reactions = ["r", "+"]
+close_reactions = ["escape"]
 toggle_file = ["z"]
 cycle_diff_mode = ["d"]
 toggle_sidebar = ["b"]

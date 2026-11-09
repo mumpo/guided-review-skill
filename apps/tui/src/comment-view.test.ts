@@ -171,7 +171,7 @@ test("split cursor skips metadata, switches sides with Space, and preserves sour
         targets.length === 1 &&
         !ui.renderer.root.findDescendantById("comment-editor"),
     );
-    await ui.mockInput.pressKeys(["j", "c"]);
+    await ui.mockInput.pressKeys(["j", "z", "j", "c"]);
     await ui.renderOnce();
 
     expect(ui.captureCharFrame()).toContain("old line 2");
@@ -371,9 +371,22 @@ test("renamed and deleted files publish correct paths and comments follow overla
       const frame = ui.captureCharFrame();
       expect(frame).toContain("First comment");
       expect(frame).toContain("Second comment");
-      expect(frame.indexOf("First comment")).toBeLessThan(
-        frame.indexOf("Second comment"),
-      );
+      const { DiffView } = await import("./diff-view");
+      const occurrences = ui.renderer.root
+        .findDescendantById("body")
+        ?.getChildren()
+        .flatMap((part) => part.getChildren())
+        .filter((node) => node instanceof DiffView);
+      expect(occurrences).toHaveLength(3);
+      for (const view of occurrences?.slice(1) ?? []) {
+        const bodies = (view as InstanceType<typeof DiffView>)
+          .searchTargets()
+          .map((target) => target.text)
+          .filter((text) => text.includes("comment"));
+        expect(bodies.indexOf("me: First comment")).toBeLessThan(
+          bodies.indexOf("me: Second comment"),
+        );
+      }
     } finally {
       await sessionHighlights(ui.renderer).settled();
       await ui.dispose();

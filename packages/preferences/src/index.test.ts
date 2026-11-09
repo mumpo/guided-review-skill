@@ -135,3 +135,21 @@ test("keybinding TOML preserves assignment order and reports invalid actions wit
     "tui.keybindings.next_item",
   );
 });
+
+test("comment expansion defaults to folded and accepts only a boolean", async () => {
+  const path = join(temp, "comments.toml");
+  await writeFile(path, "");
+  expect((await loadPreferences({ config: path }, {})).commentsUnfolded).toBe(
+    false,
+  );
+
+  await writeFile(path, "[tui]\ncomments_unfolded = true\n");
+  expect((await loadPreferences({ config: path }, {})).commentsUnfolded).toBe(
+    true,
+  );
+
+  await writeFile(path, '[tui]\ncomments_unfolded = "true"\n');
+  await expect(loadPreferences({ config: path }, {})).rejects.toThrow(
+    "comments_unfolded: expected a boolean",
+  );
+});

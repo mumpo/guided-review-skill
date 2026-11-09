@@ -16,6 +16,8 @@ export const defaultKeybindings = {
   half_page_up: ["ctrl+u"],
   switch_side: ["space"],
   open_comment: ["c"],
+  open_reactions: ["r", "+"],
+  close_reactions: ["escape"],
   toggle_file: ["z"],
   cycle_diff_mode: ["d"],
   toggle_sidebar: ["b"],
@@ -33,7 +35,7 @@ export const defaultKeybindings = {
 
 export type KeyAction = keyof typeof defaultKeybindings;
 export type Keybindings = Record<KeyAction, string[]>;
-export type KeyContext = "viewer" | "editor" | "search";
+export type KeyContext = "viewer" | "editor" | "search" | "reactions";
 
 const modifiers = ["ctrl", "alt", "shift", "meta"];
 const namedKeys = new Set([
@@ -56,6 +58,8 @@ const namedKeys = new Set([
 ]);
 
 export function normalizeBinding(value: string): string {
+  if (value === "+") return "+";
+
   const parts = value.toLowerCase().split("+");
   const key = parts.pop() ?? "";
   const mods = parts.map((part) => (part === "option" ? "alt" : part));
@@ -70,7 +74,9 @@ export function normalizeBinding(value: string): string {
 }
 
 function contexts(action: KeyAction): KeyContext[] {
-  if (action === "interrupt") return ["viewer", "editor", "search"];
+  if (action === "interrupt")
+    return ["viewer", "editor", "search", "reactions"];
+  if (action === "close_reactions") return ["reactions"];
   if (action === "submit_search") return ["search"];
   if (action === "clear_search") return ["viewer", "search"];
   if (action === "close_comment" || action === "publish_comment")
@@ -115,6 +121,7 @@ export function resolveKeybindings(value: unknown = {}): Keybindings {
     viewer: new Map(),
     editor: new Map(),
     search: new Map(),
+    reactions: new Map(),
   };
   for (const [action, bindings] of assignments) {
     for (const binding of bindings) {
@@ -183,13 +190,20 @@ export function keyAction(
   let normalized: string;
   try {
     normalized = normalizeBinding(
-      [
-        ...(key.ctrl ? ["ctrl"] : []),
-        ...(key.option ? ["alt"] : []),
-        ...(key.shift || /^[A-Z]$/.test(key.name) ? ["shift"] : []),
-        ...(key.meta ? ["meta"] : []),
-        key.name,
-      ].join("+"),
+      !key.ctrl &&
+        !key.option &&
+        !key.meta &&
+        (key.name === "+" ||
+          key.name === "plus" ||
+          (key.name === "=" && key.shift))
+        ? "+"
+        : [
+            ...(key.ctrl ? ["ctrl"] : []),
+            ...(key.option ? ["alt"] : []),
+            ...(key.shift || /^[A-Z]$/.test(key.name) ? ["shift"] : []),
+            ...(key.meta ? ["meta"] : []),
+            key.name,
+          ].join("+"),
     );
   } catch {
     return undefined;

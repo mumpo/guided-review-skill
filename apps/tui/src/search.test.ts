@@ -255,7 +255,8 @@ for (const mode of ["inline", "side-by-side"] as const) {
       expect(count.plainText).toBe(" 1/1 ");
       expect(get<DiffView>("changes-1").hasCursor).toBe(true);
       await press("c");
-      expect(get("comment-editor")).toBeUndefined();
+      expect(Boolean(get("comment-editor"))).toBe(true);
+      await press("\u001b[27u");
       for (const term of [
         "commentAuthor",
         "commentURL",
