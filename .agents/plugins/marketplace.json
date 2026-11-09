@@ -1,0 +1,20 @@
+{
+  "name": "mumpo-plugins",
+  "interface": {
+    "displayName": "Mumpo Plugins"
+  },
+  "plugins": [
+    {
+      "name": "guided-review",
+      "source": {
+        "source": "local",
+        "path": "./guided-review"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

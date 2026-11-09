@@ -1,0 +1,14 @@
+{
+  "name": "mumpo-plugins",
+  "description": "Local developer workflows by Mumpo, including Guided Review for GitHub pull requests.",
+  "owner": {
+    "name": "Sergi Férriz"
+  },
+  "plugins": [
+    {
+      "name": "guided-review",
+      "description": "Generate a PR walkthrough and browse its captured diff offline in your terminal. Requires Bun and gh.",
+      "source": "./guided-review"
+    }
+  ]
+}

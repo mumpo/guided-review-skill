@@ -1,0 +1,60 @@
+# Copy to ~/.config/guided-review/config.toml (or under $XDG_CONFIG_HOME).
+viewer = "tui"
+auto_open = true
+
+[tui]
+theme = "auto"
+light_theme = "github-light"
+dark_theme = "github-dark"
+diff_mode = "auto"
+# auto, terminal-window, tmux-window, tmux-pane, tmux-popup,
+# herdr-tab, herdr-pane, custom
+launch = "auto"
+
+[tui.pane]
+direction = "right"
+size = 50
+
+[tui.popup]
+width = 90
+height = 90
+
+# When launch = "custom", use your terminal's execute-command arguments.
+# The standalone {viewer} expands into separate executable/argument entries.
+[tui.custom]
+command = ["kitty", "--title", "Guided Review", "{viewer}"]
+
+# Omitted actions keep their defaults. An array replaces an action's bindings;
+# [] disables it. Later assignments win conflicts (defaults are applied first).
+# Viewer, search-input, and comment-editor bindings have separate contexts;
+# clear_search applies to viewer/search input, and interrupt is global.
+[tui.keybindings]
+next_section = ["ctrl+n"]
+previous_section = ["ctrl+p"]
+next_item = ["tab"]
+previous_item = ["shift+tab"]
+summary = ["s", "home"]
+last_section = ["end"]
+cursor_down = ["j"]
+cursor_up = ["k"]
+scroll_down = ["down"]
+scroll_up = ["up"]
+page_down = ["pagedown"]
+page_up = ["pageup"]
+half_page_down = ["ctrl+d"]
+half_page_up = ["ctrl+u"]
+switch_side = ["space"]
+open_comment = ["c"]
+toggle_file = ["z"]
+cycle_diff_mode = ["d"]
+toggle_sidebar = ["b"]
+toggle_help = ["?"]
+open_search = ["/"]
+clear_search = ["escape"]
+submit_search = ["return"]
+next_match = ["n"]
+previous_match = ["shift+n"]
+quit = ["q"]
+interrupt = ["ctrl+c"]
+close_comment = ["escape"]
+publish_comment = ["ctrl+s"]
