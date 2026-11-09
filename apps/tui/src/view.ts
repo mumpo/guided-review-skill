@@ -14,14 +14,20 @@ import {
 } from "@opentui/core";
 import type { LoadedReview } from "./load";
 import { type DiffMode, sectionDiffRows } from "./diff";
-import { createCommentState, DiffView } from "./diff-view";
+import { createCommentState, notifyComments, DiffView } from "./diff-view";
 import { ExplanationView } from "./explanation-view";
 import { MarkdownView } from "./markdown-view";
 import { sessionHighlights } from "./highlight-service";
 import { reviewSyntaxSamples } from "./highlight-preload";
 import { type Theme, themes } from "./theme";
 import { PullRequestHeader } from "./pr-header";
-import { githubCommentPublisher, type PublishComment } from "./comments";
+import {
+  githubCommentPublisher,
+  type PublishComment,
+  type ThreadService,
+} from "./comments";
+import { githubThreadService } from "./threads";
+import { ReactionPicker } from "./reaction-picker";
 import { CursorText } from "./cursor-text";
 import { cursorBackground } from "./cursor-highlight";
 import { DocumentSearch, SearchText, type SearchTarget } from "./search";
@@ -61,13 +67,37 @@ export function mountReview(
   diffMode: DiffMode = "auto",
   publish?: PublishComment,
   bindings: Keybindings = resolveKeybindings(),
+  options: {
+    commentsUnfolded?: boolean;
+    threads?: ThreadService;
+    loadThreads?: boolean;
+  } = {},
 ): (theme: Theme) => void {
   const { snapshot, analysis } = review;
   const pr = snapshot.pullRequest;
   const commentController = new AbortController();
   const publisher =
     publish ?? githubCommentPublisher(pr, undefined, commentController.signal);
-  const commentState = createCommentState();
+  const threadService =
+    options.threads ??
+    (options.loadThreads
+      ? githubThreadService(pr, undefined, commentController.signal)
+      : undefined);
+  const commentState = createCommentState(
+    options.commentsUnfolded,
+    threadService,
+  );
+  const reactionPicker = new ReactionPicker(
+    renderer,
+    commentState,
+    bindings,
+    theme,
+  );
+  commentState.openReactions = (comment) => {
+    if (parts.some((part) => part.changes.editing)) return;
+
+    reactionPicker.open(comment);
+  };
   const parts: DocumentPart[] = [];
   const entries: NavigationEntry[] = [];
   const texts: CursorText[] = [];
@@ -396,6 +426,71 @@ export function mountReview(
       );
   }
 
+  for (const [index, part] of parts.entries()) {
+    part.changes.onFocus = (focus) => {
+      if (
+        parts.some((part) => part.changes.editing) ||
+        reactionPicker.overlay.visible ||
+        searchState === "editing"
+      )
+        return false;
+
+      parts[active].cursor.deactivate();
+      active = index;
+      part.cursor.focusDiff(focus);
+      paintSidebar();
+      return true;
+    };
+  }
+
+  const threadStatus = plain(parts[0].narrative, "");
+  threadStatus.id = "thread-load-status";
+  threadStatus.visible = !!threadService;
+  if (threadService) {
+    threadStatus.content = "Loading review threads…";
+    void threadService
+      .load()
+      .then((threads) => {
+        if (commentController.signal.aborted) return;
+
+        for (const thread of threads) {
+          const paths = snapshot.files.filter(
+            (file) => file.newPath === thread.path,
+          );
+          const candidates = paths.length
+            ? paths
+            : snapshot.files.filter((file) => file.oldPath === thread.path);
+          if (candidates.length !== 1) continue;
+
+          thread.fileId = candidates[0].id;
+          const local = [...commentState.threads.values()].find(
+            (current) =>
+              current.id === thread.id ||
+              (current.id.startsWith("local:") &&
+                current.comments[0]?.id === thread.comments[0]?.id),
+          );
+          if (local) {
+            // Keep local identities/drafts stable if a write completed during loading.
+            local.comments = [
+              ...new Map(
+                [...thread.comments, ...local.comments].map((comment) => [
+                  comment.id,
+                  comment,
+                ]),
+              ).values(),
+            ];
+          } else commentState.threads.set(thread.id, thread);
+        }
+        threadStatus.visible = false;
+        notifyComments(commentState);
+      })
+      .catch((error) => {
+        if (commentController.signal.aborted) return;
+
+        threadStatus.content = `Could not load review threads: ${error instanceof Error ? error.message : String(error)}`;
+      });
+  }
+
   function updateHelp() {
     const label = (action: keyof Keybindings, context: KeyContext = "viewer") =>
       actionKeys(bindings, action, context)
@@ -418,8 +513,10 @@ export function mountReview(
       half_page_down: "half page down",
       half_page_up: "half page up",
       switch_side: "switch diff side",
-      open_comment: "open line comment",
-      toggle_file: "fold/unfold file",
+      open_comment: "new comment / reply",
+      open_reactions: "react to comment",
+      close_reactions: "close reactions",
+      toggle_file: "fold/unfold thread or file",
       cycle_diff_mode: `cycle diff layout (${diffMode})`,
       toggle_sidebar: "toggle sidebar",
       quit: "quit",
@@ -488,6 +585,7 @@ export function mountReview(
         actions: [
           "switch_side",
           "open_comment",
+          "open_reactions",
           "toggle_file",
           "cycle_diff_mode",
         ],
@@ -509,6 +607,11 @@ export function mountReview(
       {
         title: "Application",
         actions: ["toggle_sidebar", "toggle_help", "quit", "interrupt"],
+      },
+      {
+        title: "Reaction picker",
+        actions: ["close_reactions", "interrupt"],
+        context: "reactions",
       },
       {
         title: "Comment editor",
@@ -647,6 +750,7 @@ export function mountReview(
   }
 
   function updateGeometry() {
+    reactionPicker.resize();
     const modalWidth = Math.max(1, Math.min(88, renderer.width - 4));
     const modalHeight = Math.max(1, Math.min(42, renderer.height - 4));
     keybindingsModal.width = modalWidth;
@@ -686,6 +790,7 @@ export function mountReview(
 
   function applyTheme(next: Theme) {
     theme = next;
+    reactionPicker.setTheme(theme);
     renderer.setBackgroundColor(theme.background);
     root.backgroundColor = theme.background;
     searchBar.backgroundColor = theme.surface;
@@ -912,6 +1017,7 @@ export function mountReview(
   });
 
   function onKey(key: KeyEvent) {
+    if (reactionPicker.handleKey(key)) return;
     const editor = parts.find((part) => part.changes.editing)?.changes;
     const action = keyAction(
       bindings,
@@ -1056,6 +1162,9 @@ export function mountReview(
       case "half_page_up":
         scrollDocument(-Math.max(1, Math.floor(body.viewport.height / 2)));
         break;
+      case "open_reactions":
+        part.changes.openReactions();
+        break;
       case "open_comment":
         part.changes.openComment();
         break;
@@ -1086,10 +1195,15 @@ export function mountReview(
     key.preventDefault();
   }
 
-  const onPaste = (event: PasteEvent) =>
+  const onPaste = (event: PasteEvent) => {
+    if (reactionPicker.overlay.visible) {
+      event.preventDefault();
+      return;
+    }
     parts
       .find((part) => part.changes.editing)
       ?.changes.handleCommentPaste(event);
+  };
   const onFrame = () => {
     for (const part of parts) part.explanation?.checkGeometry();
     parts[active].cursor.refresh();

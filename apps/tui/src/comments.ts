@@ -5,6 +5,7 @@ export interface CommentTarget {
   path: string;
   side: "old" | "new";
   line: number;
+  replyTo?: string;
 }
 
 export interface PublishedComment {
@@ -12,6 +13,51 @@ export interface PublishedComment {
   body: string;
   author: string;
   url: string;
+  nodeId?: string;
+  reactions?: Reaction[];
+}
+
+export const reactionChoices = [
+  ["THUMBS_UP", "👍"],
+  ["THUMBS_DOWN", "👎"],
+  ["LAUGH", "😄"],
+  ["HOORAY", "🎉"],
+  ["CONFUSED", "😕"],
+  ["HEART", "❤️"],
+  ["ROCKET", "🚀"],
+  ["EYES", "👀"],
+] as const;
+
+export type ReactionContent = (typeof reactionChoices)[number][0];
+
+export interface Reaction {
+  content: ReactionContent;
+  count: number;
+  viewerHasReacted: boolean;
+}
+
+export interface ReviewThread {
+  id: string;
+  path: string;
+  side: "old" | "new";
+  line: number | null;
+  startLine?: number | null;
+  startSide?: "old" | "new";
+  fileId?: string;
+  fileLevel?: boolean;
+  resolved: boolean;
+  outdated: boolean;
+  comments: PublishedComment[];
+}
+
+export interface ThreadService {
+  load(): Promise<ReviewThread[]>;
+  reply(thread: ReviewThread, body: string): Promise<PublishedComment>;
+  react(
+    comment: PublishedComment,
+    content: ReactionContent,
+    remove: boolean,
+  ): Promise<Reaction[]>;
 }
 
 export type PublishComment = (
@@ -25,7 +71,7 @@ export type CommentTransport = (
   signal?: AbortSignal,
 ) => Promise<string>;
 
-const gh: CommentTransport = async (args, input, signal) => {
+export const gh: CommentTransport = async (args, input, signal) => {
   let child: Bun.Subprocess<"ignore" | Uint8Array, "pipe", "pipe">;
   try {
     child = Bun.spawn(["gh", ...args], {
@@ -150,6 +196,9 @@ export function githubCommentPublisher(
         body: result.body,
         author: result.user.login,
         url: result.html_url,
+        ...(typeof result.node_id === "string"
+          ? { nodeId: result.node_id }
+          : {}),
       };
     } catch (error) {
       throw new Error(
@@ -162,5 +211,6 @@ export function githubCommentPublisher(
 }
 
 export function commentKey(target: CommentTarget): string {
+  if (target.replyTo) return `reply:${target.replyTo}`;
   return JSON.stringify([target.fileId, target.side, target.line]);
 }

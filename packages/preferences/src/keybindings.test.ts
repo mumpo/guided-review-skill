@@ -164,3 +164,36 @@ test("clear_search can lose a binding independently in viewer and search context
   expect(keyAction(viewerWins, { name: "escape" }, "viewer")).toBe("quit");
   expect(keyAction(viewerWins, { name: "N" }, "viewer")).toBe("previous_match");
 });
+
+test("reaction keys normalize literal plus and isolate picker closing from search and editor", () => {
+  const bindings = resolveKeybindings();
+
+  expect(keyAction(bindings, { name: "+" }, "viewer")).toBe("open_reactions");
+  expect(keyAction(bindings, { name: "=", shift: true }, "viewer")).toBe(
+    "open_reactions",
+  );
+  expect(keyAction(bindings, { name: "plus", shift: true }, "viewer")).toBe(
+    "open_reactions",
+  );
+  expect(keyAction(bindings, { name: "escape" }, "reactions")).toBe(
+    "close_reactions",
+  );
+  expect(keyAction(bindings, { name: "escape" }, "viewer")).toBe(
+    "clear_search",
+  );
+  expect(keyAction(bindings, { name: "r" }, "reactions")).toBeUndefined();
+  expect(
+    keyAction(bindings, { name: "+", ctrl: true }, "viewer"),
+  ).toBeUndefined();
+  expect(keyAction(bindings, { name: "c", ctrl: true }, "reactions")).toBe(
+    "interrupt",
+  );
+
+  const custom = resolveKeybindings({
+    open_reactions: ["a"],
+    close_reactions: ["x"],
+  });
+  expect(keyAction(custom, { name: "+" }, "viewer")).toBeUndefined();
+  expect(keyAction(custom, { name: "a" }, "viewer")).toBe("open_reactions");
+  expect(keyAction(custom, { name: "x" }, "reactions")).toBe("close_reactions");
+});

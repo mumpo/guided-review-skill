@@ -38,9 +38,14 @@ import {
   type CommentTarget,
   type PublishedComment,
   type PublishComment,
+  type ReviewThread,
+  type ThreadService,
+  reactionChoices,
+  type ReactionContent,
 } from "./comments";
 import {
   keyAction,
+  actionKeys,
   resolveKeybindings,
   type Keybindings,
 } from "../../../packages/preferences/src/keybindings";
@@ -54,6 +59,9 @@ interface CursorRow {
   header?: boolean;
   textKey?: string;
   text?: SearchText;
+  thread?: ReviewThread;
+  comment?: PublishedComment;
+  threadBody?: boolean;
 }
 
 export interface Draft {
@@ -65,12 +73,64 @@ export interface Draft {
 
 export interface CommentState {
   drafts: Map<string, Draft>;
-  comments: Map<string, PublishedComment[]>;
+  threads: Map<string, ReviewThread>;
+  expanded: Map<string, boolean>;
+  unfolded: boolean;
+  service?: ThreadService;
+  openReactions?: (comment: PublishedComment) => void;
+  reactionPending: Set<number>;
+  reactionErrors: Map<number, string>;
   listeners: Set<() => void>;
 }
 
-export function createCommentState(): CommentState {
-  return { drafts: new Map(), comments: new Map(), listeners: new Set() };
+export function createCommentState(
+  unfolded = false,
+  service?: ThreadService,
+): CommentState {
+  return {
+    drafts: new Map(),
+    threads: new Map(),
+    expanded: new Map(),
+    unfolded,
+    service,
+    reactionPending: new Set(),
+    reactionErrors: new Map(),
+    listeners: new Set(),
+  };
+}
+
+export function notifyComments(state: CommentState) {
+  for (const listener of state.listeners) listener();
+}
+
+export async function toggleReaction(
+  state: CommentState,
+  comment: PublishedComment,
+  content: ReactionContent,
+) {
+  if (state.reactionPending.has(comment.id)) return;
+
+  state.reactionPending.add(comment.id);
+  state.reactionErrors.delete(comment.id);
+  notifyComments(state);
+  try {
+    if (!state.service) throw new Error("Reactions are unavailable.");
+
+    comment.reactions = await state.service.react(
+      comment,
+      content,
+      comment.reactions?.find((reaction) => reaction.content === content)
+        ?.viewerHasReacted ?? false,
+    );
+  } catch (error) {
+    state.reactionErrors.set(
+      comment.id,
+      error instanceof Error ? error.message : String(error),
+    );
+  } finally {
+    state.reactionPending.delete(comment.id);
+    notifyComments(state);
+  }
 }
 
 /** Layout owns presentation only; all rows come from resolved captured changes. */
@@ -86,6 +146,8 @@ export class DiffView extends BoxRenderable {
     node: BoxRenderable | TextRenderable;
     file: string;
     sources: number[];
+    key?: string;
+    thread?: ReviewThread;
   }[] = [];
   private collapsed = new Set<string>();
   private headers: {
@@ -117,14 +179,39 @@ export class DiffView extends BoxRenderable {
   private commentBoxes: BoxRenderable[] = [];
   private commentText: SearchText[] = [];
   private columns?: number;
+  onFocus?: (focus: () => void) => boolean;
   private onComments = () => this.preserve(() => this.rebuild());
 
   private get drafts() {
     return this.commentState.drafts;
   }
 
-  private get comments() {
-    return this.commentState.comments;
+  private get focusedRow() {
+    return this.cursorRows.find((row) => this.matchesCursor(row));
+  }
+
+  private expanded(thread: ReviewThread) {
+    return (
+      this.commentState.expanded.get(thread.id) ?? this.commentState.unfolded
+    );
+  }
+
+  openReactions() {
+    if (this.cursorActive && this.focusedRow?.comment)
+      this.commentState.openReactions?.(this.focusedRow.comment);
+  }
+
+  private toggleThread(thread: ReviewThread) {
+    if (this.active) return;
+
+    this.commentState.expanded.set(thread.id, !this.expanded(thread));
+    const header = this.cursorRows.find(
+      (row) => row.thread === thread && !row.threadBody,
+    );
+    if (this.cursorActive && this.focusedRow?.thread === thread)
+      this.selectRow(header);
+    notifyComments(this.commentState);
+    this.revealCursor();
   }
 
   get editing() {
@@ -169,6 +256,10 @@ export class DiffView extends BoxRenderable {
       focus: (character: number) => {
         this.anchorEpoch++;
         if (this.collapsed.has(file)) this.toggleFile(file);
+        if (row.thread && !this.expanded(row.thread)) {
+          this.commentState.expanded.set(row.thread.id, true);
+          this.refreshThreadVisibility();
+        }
         this.selectRow(row);
         if (target) {
           this.selected = target;
@@ -369,9 +460,21 @@ export class DiffView extends BoxRenderable {
   }
 
   openComment() {
-    if (!this.cursorActive || !this.selected) return;
+    if (!this.cursorActive) return;
 
-    this.active = { ...this.selected };
+    const thread = this.focusedRow?.thread;
+    const file = this.files.find((file) => file.id === this.cursorFile);
+    if (thread && file) {
+      this.commentState.expanded.set(thread.id, true);
+      this.active = {
+        fileId: file.id,
+        path: thread.path,
+        side: thread.side,
+        line: thread.line ?? 1,
+        replyTo: thread.id,
+      };
+    } else if (this.selected) this.active = { ...this.selected };
+    else return;
     const key = commentKey(this.active);
     if (!this.drafts.has(key)) this.drafts.set(key, { body: "", cursor: 0 });
 
@@ -398,10 +501,41 @@ export class DiffView extends BoxRenderable {
     this.preserve(() => this.rebuild());
 
     try {
-      if (!this.publish) throw new Error("Comment publishing is unavailable.");
+      if (target.replyTo) {
+        const thread = this.commentState.threads.get(target.replyTo);
+        if (!thread || !this.commentState.service)
+          throw new Error("Reply publishing is unavailable.");
 
-      const posted = await this.publish(target, draft.body);
-      this.comments.set(key, [...(this.comments.get(key) ?? []), posted]);
+        const posted = await this.commentState.service.reply(
+          thread,
+          draft.body,
+        );
+        thread.comments = [
+          ...new Map(
+            [...thread.comments, posted].map((comment) => [
+              comment.id,
+              comment,
+            ]),
+          ).values(),
+        ];
+      } else {
+        if (!this.publish)
+          throw new Error("Comment publishing is unavailable.");
+
+        const posted = await this.publish(target, draft.body);
+        const thread: ReviewThread = {
+          id: `local:${posted.id}`,
+          path: target.path,
+          side: target.side,
+          line: target.line,
+          fileId: target.fileId,
+          resolved: false,
+          outdated: false,
+          comments: [posted],
+        };
+        this.commentState.threads.set(thread.id, thread);
+        this.commentState.expanded.set(thread.id, true);
+      }
       this.drafts.delete(key);
       if (this.active && commentKey(this.active) === key)
         this.active = undefined;
@@ -417,7 +551,9 @@ export class DiffView extends BoxRenderable {
     return this.cursorRows.filter(
       (row) =>
         (row.header || !this.collapsed.has(row.file)) &&
-        (!row.textKey || row.textKey === this.selectedText),
+        (row.thread
+          ? !row.threadBody || this.expanded(row.thread)
+          : !row.textKey || row.textKey === this.selectedText),
     );
   }
 
@@ -583,7 +719,8 @@ export class DiffView extends BoxRenderable {
     const epoch = ++this.anchorEpoch;
     const top = this.body.viewport.y;
     const anchor = this.logical.find(
-      ({ node, file }) =>
+      ({ node, file, thread }) =>
+        (!thread || this.expanded(thread)) &&
         (!this.collapsed.has(file) ||
           this.headers.some((header) => header.box === node)) &&
         node.y + node.height > top,
@@ -607,13 +744,20 @@ export class DiffView extends BoxRenderable {
       const next = this.logical.find(
         (row) =>
           row.file === anchor.file &&
-          row.sources.some((source) => anchor.sources.includes(source)),
+          (anchor.key
+            ? row.key === anchor.key
+            : !row.key &&
+              row.sources.some((source) => anchor.sources.includes(source))),
       );
       if (next) this.body.scrollBy(next.node.y - oldY);
     });
   }
 
   toggleVisibleFile() {
+    if (this.cursorActive && this.focusedRow?.thread) {
+      this.toggleThread(this.focusedRow.thread);
+      return true;
+    }
     const selectedFile = this.cursorFile;
     if (this.cursorActive && selectedFile) {
       this.toggleFile(selectedFile);
@@ -648,10 +792,7 @@ export class DiffView extends BoxRenderable {
 
     header.content.visible = !this.collapsed.has(id);
     header.chevron.content = header.content.visible ? "⌄" : "›";
-    if (
-      this.cursorActive &&
-      (this.selectedHeader ?? this.selected?.fileId) === id
-    ) {
+    if (this.cursorActive && this.cursorFile === id) {
       if (this.collapsed.has(id))
         this.selectRow(
           this.cursorRows.find((row) => row.header && row.file === id),
@@ -757,6 +898,7 @@ export class DiffView extends BoxRenderable {
     this.cursorBoxes = [];
     this.logical = [];
     this.cursorRows = [];
+    this.threadDetails = [];
     this.commentBoxes = [];
     this.commentText = [];
     this.searchEntries = [];
@@ -784,6 +926,21 @@ export class DiffView extends BoxRenderable {
 
       const content =
         file.oldPath || file.newPath ? this.fileHeader(file) : this;
+      for (const thread of this.commentState.threads.values()) {
+        if (this.matchesThreadFile(thread, file) && thread.fileLevel)
+          this.renderCommentBlock(
+            content,
+            {
+              fileId: file.id,
+              path: thread.path,
+              side: thread.side,
+              line: 1,
+              replyTo: thread.id,
+            },
+            mode,
+            thread,
+          );
+      }
       let seenHunk = false;
 
       for (const row of layoutFileRows(file, mode)) {
@@ -981,136 +1138,322 @@ export class DiffView extends BoxRenderable {
     mode: "inline" | "side-by-side",
   ) {
     for (const target of targets) {
-      const key = commentKey(target);
-      const published = this.comments.get(key) ?? [];
-      const active = this.active && commentKey(this.active) === key;
-      const draft = this.drafts.get(key);
-      const status = draft?.pending || draft?.error;
-      if (!published.length && !active && !status) continue;
+      this.renderCommentBlock(content, target, mode);
+      for (const thread of this.commentState.threads.values()) {
+        const file = this.files.find((file) => file.id === target.fileId);
+        if (
+          file &&
+          this.matchesThreadFile(thread, file) &&
+          !thread.fileLevel &&
+          thread.side === target.side &&
+          thread.line === target.line
+        )
+          this.renderCommentBlock(
+            content,
+            { ...target, replyTo: thread.id },
+            mode,
+            thread,
+          );
+      }
+    }
+  }
 
-      const row = new BoxRenderable(this.renderer, {
+  private matchesThreadFile(thread: ReviewThread, file: FileRows) {
+    return (
+      !thread.outdated &&
+      (thread.fileId
+        ? thread.fileId === file.id
+        : thread.path === file.newPath || thread.path === file.oldPath)
+    );
+  }
+
+  private threadDetails: {
+    thread: ReviewThread;
+    box: BoxRenderable;
+    frame: BoxRenderable;
+    header: SearchText;
+  }[] = [];
+
+  private refreshThreadVisibility() {
+    for (const { thread, box, frame, header } of this.threadDetails) {
+      box.visible = this.expanded(thread);
+      frame.border = box.visible;
+      const label = `${box.visible ? "⌄" : "›"} \uf41f ${thread.comments.length} comments`;
+      if (header.plainText !== label) header.content = label;
+    }
+  }
+
+  private renderCommentBlock(
+    content: BoxRenderable,
+    target: CommentTarget,
+    mode: "inline" | "side-by-side",
+    thread?: ReviewThread,
+  ) {
+    const key = commentKey(target);
+    const published = thread?.comments ?? [];
+    const active = this.active && commentKey(this.active) === key;
+    const draft = this.drafts.get(key);
+    const status = draft?.pending || draft?.error;
+    if (!thread && !active && !status) return;
+
+    const row = new BoxRenderable(this.renderer, {
+      width: "100%",
+      flexDirection: "row",
+      flexShrink: 0,
+    });
+    if (mode === "side-by-side") {
+      row.add(new BoxRenderable(this.renderer, { flexGrow: 1, flexBasis: 0 }));
+      row.add(new BoxRenderable(this.renderer, { width: 3 }));
+    }
+
+    // Keep borders/padding inside an equal-width pane so they do not shift
+    // the editor left relative to the code pane above it.
+    const pane = new BoxRenderable(this.renderer, {
+      flexGrow: 1,
+      flexBasis: 0,
+      minWidth: 0,
+      flexDirection: "column",
+    });
+    const box = new BoxRenderable(this.renderer, {
+      width: "100%",
+      minWidth: 0,
+      flexShrink: 0,
+      flexDirection: "column",
+      border: !thread || this.expanded(thread),
+      borderColor: this.palette.border,
+      backgroundColor: this.palette.surface,
+      paddingLeft: 1,
+      paddingRight: 1,
+    });
+    this.commentBoxes.push(box);
+    let textIndex = 0;
+    let parent = box;
+    let threadBody = false;
+    const commentLines = new Map<number, number>();
+    const text = (
+      value: string,
+      searchable = true,
+      comment?: PublishedComment,
+      role?: string,
+    ) => {
+      const nodes: SearchText[] = [];
+      for (const line of value.split("\n")) {
+        const node = new SearchText(this.renderer, {
+          content: line,
+          width: "100%",
+          minHeight: 1,
+          wrapMode: "word",
+          flexShrink: 0,
+          fg: this.palette.text,
+          bg: this.palette.surface,
+        });
+        this.commentText.push(node);
+        parent.add(node);
+        nodes.push(node);
+        textIndex++;
+        const commentLine = comment ? (commentLines.get(comment.id) ?? 0) : 0;
+        if (comment) commentLines.set(comment.id, commentLine + 1);
+        const textKey = role
+          ? `comment:${key}:role:${role}`
+          : comment
+            ? `comment:${key}:${comment.id}:${commentLine}`
+            : `comment:${key}:${textIndex}`;
+        const cursorRow: CursorRow = {
+          node,
+          file: target.fileId,
+          targets: [],
+          textKey,
+          text: node,
+          thread,
+          comment,
+          threadBody,
+        };
+        node.onMouseDown = (event) => {
+          if (event.button !== 0) return;
+
+          event.stopPropagation();
+          this.onFocus?.(() => {
+            this.selectRow(cursorRow);
+            this.setCursorActive(true);
+            this.setTheme(this.palette);
+          });
+        };
+        this.cursorRows.push(cursorRow);
+        this.logical.push({
+          node,
+          file: target.fileId,
+          sources: [],
+          key: textKey,
+          thread: threadBody ? thread : undefined,
+        });
+        if (searchable) {
+          const source =
+            this.files
+              .find((file) => file.id === target.fileId)
+              ?.rows.findIndex(
+                ({ line }) =>
+                  line &&
+                  (target.side === "old" ? line.oldLine : line.newLine) ===
+                    target.line,
+              ) ?? 0;
+          this.addSearchTarget(
+            textKey,
+            node,
+            target.fileId,
+            cursorRow,
+            0,
+            line,
+            undefined,
+            [source, 1, textIndex],
+          );
+        }
+      }
+      return nodes;
+    };
+
+    if (thread) {
+      const [header] = text(
+        `${this.expanded(thread) ? "⌄" : "›"} \uf41f ${published.length} comments`,
+      );
+      header.id = `thread-${thread.id}`;
+      header.height = 1;
+      header.wrapMode = "none";
+      header.onMouseDown = (event) => {
+        if (event.button !== 0) return;
+
+        event.stopPropagation();
+        const accepted = this.onFocus?.(() => {
+          this.selectRow(
+            this.cursorRows.find(
+              (row) => row.thread === thread && !row.threadBody,
+            ),
+          );
+          this.setCursorActive(true);
+        });
+        if (accepted !== false) this.toggleThread(thread);
+      };
+      parent = new BoxRenderable(this.renderer, {
+        width: "100%",
+        flexDirection: "column",
+        flexShrink: 0,
+        visible: this.expanded(thread),
+      });
+      box.add(parent);
+      this.threadDetails.push({ thread, box: parent, frame: box, header });
+      threadBody = true;
+    }
+    text(
+      `${target.path} · ${target.side} ${thread?.fileLevel ? "file" : thread?.startLine ? (thread.startSide && thread.startSide !== target.side ? `range ${thread.startSide} ${thread.startLine}–${target.side} ${target.line}` : `lines ${thread.startLine}–${target.line}`) : `line ${target.line}`}${thread?.resolved ? " · Resolved" : ""}`,
+    );
+    for (const comment of published) {
+      text(`${comment.author}: ${comment.body}\n${comment.url}`, true, comment);
+      const reactions = new BoxRenderable(this.renderer, {
         width: "100%",
         flexDirection: "row",
+        flexWrap: "wrap",
         flexShrink: 0,
+        gap: 1,
       });
-      if (mode === "side-by-side") {
-        row.add(
-          new BoxRenderable(this.renderer, { flexGrow: 1, flexBasis: 0 }),
-        );
-        row.add(new BoxRenderable(this.renderer, { width: 3 }));
-      }
+      parent.add(reactions);
+      const button = (label: string, id: string, action: () => void) => {
+        const node = new SearchText(this.renderer, {
+          id,
+          content: label,
+          flexShrink: 0,
+          onMouseDown: (event) => {
+            if (event.button !== 0 || this.active) return;
 
-      // Keep borders/padding inside an equal-width pane so they do not shift
-      // the editor left relative to the code pane above it.
-      const pane = new BoxRenderable(this.renderer, {
-        flexGrow: 1,
-        flexBasis: 0,
-        minWidth: 0,
-        flexDirection: "column",
-      });
-      const box = new BoxRenderable(this.renderer, {
-        width: "100%",
-        minWidth: 0,
-        flexShrink: 0,
-        flexDirection: "column",
-        border: true,
-        borderColor: this.palette.border,
-        backgroundColor: this.palette.surface,
-        paddingLeft: 1,
-        paddingRight: 1,
-      });
-      this.commentBoxes.push(box);
-      let textIndex = 0;
-      const text = (value: string, searchable = true) => {
-        for (const line of value.split("\n")) {
-          const node = new SearchText(this.renderer, {
-            content: line,
-            width: "100%",
-            minHeight: 1,
-            wrapMode: "word",
-            flexShrink: 0,
-            fg: this.palette.text,
-            bg: this.palette.surface,
-          });
-          this.commentText.push(node);
-          box.add(node);
-          const textKey = `comment:${key}:${textIndex++}`;
-          const cursorRow: CursorRow = {
-            node,
-            file: target.fileId,
-            targets: [],
-            textKey,
-            text: node,
-          };
-          this.cursorRows.push(cursorRow);
-          if (searchable) {
-            const source =
-              this.files
-                .find((file) => file.id === target.fileId)
-                ?.rows.findIndex(
-                  ({ line }) =>
-                    line &&
-                    (target.side === "old" ? line.oldLine : line.newLine) ===
-                      target.line,
-                ) ?? 0;
-            this.addSearchTarget(
-              textKey,
-              node,
-              target.fileId,
-              cursorRow,
-              0,
-              line,
-              undefined,
-              [source, 1, textIndex],
-            );
-          }
-        }
+            event.stopPropagation();
+            const accepted = this.onFocus?.(() => {
+              this.selectRow(
+                this.cursorRows.find((row) => row.comment === comment),
+              );
+              this.setCursorActive(true);
+              this.setTheme(this.palette);
+            });
+            if (accepted !== false) action();
+          },
+        });
+        this.commentText.push(node);
+        reactions.add(node);
       };
-
-      text(
-        `${target.path} · ${target.side === "old" ? "old" : "new"} line ${target.line}`,
-      );
-      for (const comment of published) {
-        text(`${comment.author}: ${comment.body}\n${comment.url}`);
-      }
-
-      if (active) {
-        if (draft) {
-          this.editor = new TextareaRenderable(this.renderer, {
-            id: "comment-editor",
-            width: "100%",
-            height: 5,
-            flexShrink: 0,
-            initialValue: draft.body,
-            wrapMode: "word",
-            backgroundColor: this.palette.background,
-            textColor: this.palette.text,
-            focusedBackgroundColor: this.palette.background,
-            focusedTextColor: this.palette.text,
-            keyBindings: [{ name: "return", action: "newline" }],
-            onContentChange: () => this.captureEditor(),
-          });
-          box.add(this.editor);
-          text(
-            draft.pending
-              ? "Publishing…"
-              : `${this.bindings.close_comment.join("/") || "unbound"}: close · ${this.bindings.publish_comment.join("/") || "unbound"}: publish`,
-            false,
-          );
-          if (draft.error) text(draft.error);
-        }
-      } else if (status) {
-        text(
-          draft?.pending
-            ? "Publishing…"
-            : `${draft?.error}\nPress c on this line to reopen the draft.`,
+      for (const [content, icon] of reactionChoices) {
+        const reaction = comment.reactions?.find(
+          (item) => item.content === content,
         );
+        if (reaction?.count)
+          button(
+            `${icon} ${reaction.count}${reaction.viewerHasReacted ? " ✓" : ""}`,
+            `reaction-${comment.id}-${content}`,
+            () => void toggleReaction(this.commentState, comment, content),
+          );
       }
-
-      pane.add(box);
-      row.add(pane);
-      content.add(row);
+      button(
+        `\uf4a2 ${actionKeys(this.bindings, "open_reactions", "viewer")[0] ?? "unbound"}`,
+        `react-${comment.id}`,
+        () => this.commentState.openReactions?.(comment),
+      );
+      if (this.commentState.reactionPending.has(comment.id))
+        text("Updating reaction…", false, comment);
+      const error = this.commentState.reactionErrors.get(comment.id);
+      if (error) text(error, false, comment);
     }
+    if (thread) {
+      const [reply] = text(
+        `Reply · ${actionKeys(this.bindings, "open_comment", "viewer").join("/") || "unbound"}`,
+        false,
+        undefined,
+        "reply",
+      );
+      reply.id = `reply-${thread.id}`;
+      reply.onMouseDown = (event) => {
+        if (event.button !== 0 || this.active) return;
+
+        event.stopPropagation();
+        const accepted = this.onFocus?.(() => {
+          this.selectRow(this.cursorRows.find((row) => row.thread === thread));
+          this.setCursorActive(true);
+        });
+        if (accepted !== false) this.openComment();
+      };
+    }
+
+    if (active) {
+      if (draft) {
+        this.editor = new TextareaRenderable(this.renderer, {
+          id: "comment-editor",
+          width: "100%",
+          height: 5,
+          flexShrink: 0,
+          initialValue: draft.body,
+          wrapMode: "word",
+          backgroundColor: this.palette.background,
+          textColor: this.palette.text,
+          focusedBackgroundColor: this.palette.background,
+          focusedTextColor: this.palette.text,
+          keyBindings: [{ name: "return", action: "newline" }],
+          onContentChange: () => this.captureEditor(),
+        });
+        parent.add(this.editor);
+        text(
+          draft.pending
+            ? "Publishing…"
+            : `${this.bindings.close_comment.join("/") || "unbound"}: close · ${this.bindings.publish_comment.join("/") || "unbound"}: publish`,
+          false,
+        );
+        if (draft.error) text(draft.error);
+      }
+    } else if (status) {
+      text(
+        draft?.pending
+          ? "Publishing…"
+          : `${draft?.error}\nPress c on this line to reopen the draft.`,
+      );
+    }
+
+    pane.add(box);
+    row.add(pane);
+    content.add(row);
   }
 
   private text(cell: DiffCell, width: number | "100%" = "100%") {
@@ -1255,6 +1598,7 @@ export class DiffView extends BoxRenderable {
       box.borderColor = theme.border;
       box.backgroundColor = theme.surface;
     }
+    this.refreshThreadVisibility();
     for (const node of this.commentText) {
       node.fg = theme.text;
       node.bg =
