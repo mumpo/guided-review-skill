@@ -445,6 +445,27 @@ export class DiffView extends BoxRenderable {
     );
   }
 
+  cursorTargets() {
+    return this.visibleCursorRows().map((row) => ({
+      top: row.node.y,
+      bottom: row.node.y + row.node.height,
+      selected: this.cursorActive && this.matchesCursor(row),
+      focus: (x?: number) => {
+        this.selectRow(row);
+        if (x !== undefined && row.targets.length > 1) {
+          const side = x < row.node.x + row.node.width / 2 ? "old" : "new";
+          const target = row.targets.find((target) => target.side === side);
+          if (target) {
+            this.selected = target;
+            this.preferredSide = side;
+          }
+        }
+        this.cursorActive = true;
+        this.setTheme(this.palette);
+      },
+    }));
+  }
+
   setCursorActive(active: boolean) {
     if (this.cursorActive === active) return;
 
