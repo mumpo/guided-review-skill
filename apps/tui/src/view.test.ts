@@ -519,6 +519,10 @@ test("arrows scroll by line, control motions scroll half viewport, and section n
 
         await press("\u000e", "\u0010");
 
+        expect(selectedDocumentPart(ui.renderer)).toBe(2);
+
+        await press("\u0010");
+
         expect(selectedDocumentPart(ui.renderer)).toBe(1);
         expect(body.scrollTop).toBeGreaterThan(0);
         expect(ui.captureCharFrame()).toContain("Narrative 1:");

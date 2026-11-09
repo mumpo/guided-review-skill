@@ -43,6 +43,20 @@ export class PageCursor {
     return this.inDiff ? this.changes.cursorFile : undefined;
   }
 
+  targets() {
+    return [
+      ...this.lines().map(({ node, line }) => ({
+        ...node.lineBounds(line),
+        selected: !this.inDiff && this.matches({ node, line }),
+        focus: (_x?: number) => this.focusText(node, line),
+      })),
+      ...this.changes.cursorTargets().map((target) => ({
+        ...target,
+        focus: (x?: number) => this.focusDiff(() => target.focus(x)),
+      })),
+    ];
+  }
+
   focusText(node: CursorText, line: number) {
     this.epoch++;
     this.selectText({ node, line });

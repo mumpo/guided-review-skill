@@ -10,6 +10,7 @@ import {
   type Renderable,
   ScrollBoxRenderable,
   TextRenderable,
+  TextAttributes,
 } from "@opentui/core";
 import type { LoadedReview } from "./load";
 import { type DiffMode, sectionDiffRows } from "./diff";
@@ -76,6 +77,7 @@ export function mountReview(
   let selectedEntry = -1;
   let sidebarOverride: boolean | undefined;
   let navigationEpoch = 0;
+  let scrollEpoch = 0;
 
   const root = new BoxRenderable(renderer, {
     id: "review",
@@ -321,6 +323,13 @@ export function mountReview(
       markdowns.push(description);
     } else {
       target = plain(narrative, section.title);
+      (target as CursorText).content = new StyledText([
+        {
+          __isChunk: true,
+          text: section.title,
+          attributes: TextAttributes.BOLD,
+        },
+      ]);
       explanation = new ExplanationView(
         renderer,
         body,
@@ -571,7 +580,11 @@ export function mountReview(
                 entry.status ? theme.fileStatus[entry.status] : foreground,
               ),
             },
-            { __isChunk: true, text: ` ${entry.display}` },
+            {
+              __isChunk: true,
+              text: ` ${entry.display}`,
+              attributes: section ? TextAttributes.BOLD : undefined,
+            },
           ])
         : entry.display;
     }
@@ -731,6 +744,73 @@ export function mountReview(
     }
     paintSidebar(true);
   }
+
+  function focusDocumentLine(y: number, x?: number, exact = false) {
+    const candidates = parts.flatMap((part, index) =>
+      part.cursor.targets().map((target) => ({ ...target, index })),
+    );
+    const distance = (target: (typeof candidates)[number]) =>
+      y < target.top ? target.top - y : Math.max(0, y - target.bottom + 1);
+    const target = candidates.reduce<(typeof candidates)[number] | undefined>(
+      (nearest, candidate) =>
+        !nearest || distance(candidate) < distance(nearest)
+          ? candidate
+          : nearest,
+      undefined,
+    );
+    if (!target || (exact && distance(target) !== 0)) return;
+
+    navigationEpoch++;
+    if (active !== target.index) parts[active].cursor.deactivate();
+    active = target.index;
+    target.focus(x);
+    paintSidebar();
+  }
+
+  function carryCursorAfterScroll() {
+    const selected = parts[active].cursor
+      .targets()
+      .find((target) => target.selected);
+    const y = Math.max(
+      body.viewport.y,
+      Math.min(
+        body.viewport.y + body.viewport.height - 1,
+        selected?.top ?? body.viewport.y,
+      ),
+    );
+    const epoch = navigationEpoch;
+    const scroll = ++scrollEpoch;
+    body.afterLayout(() => {
+      if (
+        body.isDestroyed ||
+        epoch !== navigationEpoch ||
+        scroll !== scrollEpoch
+      )
+        return;
+
+      focusDocumentLine(y);
+    });
+  }
+
+  function scrollDocument(amount: number) {
+    carryCursorAfterScroll();
+    body.scrollBy(amount);
+  }
+
+  body.onMouseDown = (event) => {
+    if (event.button !== 0 || parts.some((part) => part.changes.editing))
+      return;
+    if (
+      event.x < body.viewport.x ||
+      event.x >= body.viewport.x + body.viewport.width
+    )
+      return;
+
+    focusDocumentLine(event.y, event.x, true);
+  };
+  body.onMouseScroll = () => {
+    if (!parts.some((part) => part.changes.editing)) carryCursorAfterScroll();
+  };
 
   function searchTargets(): SearchTarget[] {
     const targets: SearchTarget[] = [];
@@ -959,22 +1039,22 @@ export function mountReview(
         break;
       }
       case "scroll_down":
-        body.scrollBy(1);
+        scrollDocument(1);
         break;
       case "scroll_up":
-        body.scrollBy(-1);
+        scrollDocument(-1);
         break;
       case "page_down":
-        body.scrollBy(Math.max(1, body.viewport.height - 1));
+        scrollDocument(Math.max(1, body.viewport.height - 1));
         break;
       case "page_up":
-        body.scrollBy(-Math.max(1, body.viewport.height - 1));
+        scrollDocument(-Math.max(1, body.viewport.height - 1));
         break;
       case "half_page_down":
-        body.scrollBy(Math.max(1, Math.floor(body.viewport.height / 2)));
+        scrollDocument(Math.max(1, Math.floor(body.viewport.height / 2)));
         break;
       case "half_page_up":
-        body.scrollBy(-Math.max(1, Math.floor(body.viewport.height / 2)));
+        scrollDocument(-Math.max(1, Math.floor(body.viewport.height / 2)));
         break;
       case "open_comment":
         part.changes.openComment();
